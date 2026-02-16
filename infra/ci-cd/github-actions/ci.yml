@@ -1,0 +1,49 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-and-test-backend:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    - name: Install dependencies
+      run: |
+        pip install -r apps/backend/requirements.txt
+        pip install pytest
+    - name: Run Tests
+      run: |
+        pytest apps/backend/tests
+
+  build-and-test-frontend:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - name: Set up Node
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18'
+    - name: Install dependencies
+      run: |
+        cd apps/frontend
+        npm install
+    - name: Run Build
+      run: |
+        cd apps/frontend
+        npm run build
+
+  deploy-to-prod:
+    needs: [build-and-test-backend, build-and-test-frontend]
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+    - name: Deploy to K8s
+      run: echo "Standard K8s deployment logic goes here (e.g., helm upgrade or kubectl apply)"
