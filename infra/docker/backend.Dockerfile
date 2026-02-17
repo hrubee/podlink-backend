@@ -11,7 +11,7 @@ COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/pytho
 COPY --from=builder /usr/local/bin /usr/local/bin
 
 COPY apps/backend /app
-COPY libs/shared/python /libs/shared
+
 
 ENV PYTHONPATH="/app:/libs"
 EXPOSE 8000
