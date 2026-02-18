@@ -11,10 +11,13 @@ from app.api.auth_deps import get_current_user
 from app.api.deps import get_db
 from app.models.user import User
 
+from app.core.config import settings as _app_settings
+
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
-INGESTION_SERVICE_URL = "http://ingestion-service:8002"
+INGESTION_SERVICE_URL = _app_settings.INGESTION_SERVICE_URL
+
 
 @router.get("/search/profiles")
 async def search_profiles(
@@ -172,6 +175,9 @@ async def get_profile_details(
         pass
 
     # 2. Try External
+    if not httpx:
+        raise HTTPException(status_code=404, detail="Profile not found")
+
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
             response = await client.get(f"{INGESTION_SERVICE_URL}/creator/{profile_id}")
@@ -192,6 +198,7 @@ async def get_profile_details(
         logger.error(f"External profile fetch failed: {e}")
 
     raise HTTPException(status_code=404, detail="Profile not found")
+
 
 @router.get("/search/podcasts")
 async def search_podcasts(

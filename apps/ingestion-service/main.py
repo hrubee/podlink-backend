@@ -113,7 +113,7 @@ async def process_podcast_ingestion(podcast_id: str):
         import httpx
         from app.core.config import settings
         
-        ml_url = "http://ml-service:8001/ingest-vectors"
+        ml_url = f"{settings.ML_SERVICE_URL}/ingest-vectors"
         async with httpx.AsyncClient() as client:
             try:
                 # Use description or title for vectorization

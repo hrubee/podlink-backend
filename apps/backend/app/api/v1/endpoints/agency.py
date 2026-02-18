@@ -21,9 +21,10 @@ class AgencyOut(BaseModel):
     id: int
     name: str
     slug: str
-    
+
     class Config:
-        orm_mode = True
+        from_attributes = True  # Pydantic v2 (replaces orm_mode = True)
+
 
 @router.post("/create", response_model=AgencyOut)
 async def create_agency(

@@ -30,7 +30,8 @@ async def semantic_search(
 ):
     """Proxy semantic search request to the ML service."""
     import httpx
-    ml_url = "http://ml-service:8001/search"
+    from app.core.config import settings
+    ml_url = f"{settings.ML_SERVICE_URL}/search"
     async with httpx.AsyncClient() as client:
         try:
             response = await client.post(ml_url, json={"query": q, "top_k": limit})
@@ -136,7 +137,8 @@ async def get_recommendation_feed(
     }
 
     # 5. Call ML Service for ranking
-    ml_url = "http://ml-service:8001/rank"
+    from app.core.config import settings as _s
+    ml_url = f"{_s.ML_SERVICE_URL}/rank"
     try:
         async with httpx.AsyncClient() as client:
             response = await client.post(ml_url, json=ml_request_data, timeout=5.0)

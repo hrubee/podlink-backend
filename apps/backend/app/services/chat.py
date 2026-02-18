@@ -4,6 +4,8 @@ from app.services.payments import PaymentService
 from app.services.chat_manager import manager
 import redis
 import json
+from datetime import datetime
+
 
 class ChatService:
     def __init__(self, db: Session, r: redis.Redis):

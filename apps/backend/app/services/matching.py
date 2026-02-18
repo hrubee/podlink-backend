@@ -84,6 +84,20 @@ class MatchingService:
             self.db.commit()
 
     async def get_active_matches(self, user_id: str) -> List[str]:
-        """Fast lookup of active match IDs."""
-        match_ids = self.redis.smembers(f"active_matches:{user_id}")
-        return [m.decode('utf-8') for m in match_ids]
+        """Fast lookup of active match IDs from Redis cache, falls back to DB."""
+        raw = self.redis.smembers(f"active_matches:{user_id}")
+        if raw:
+            # Real Redis returns bytes; NoOpRedis returns set() of strings
+            return [m.decode('utf-8') if isinstance(m, bytes) else str(m) for m in raw]
+        
+        # Fallback: query DB directly (when Redis is cold or unavailable)
+        from app.models.matches import Match
+        matches = self.db.query(Match).filter(
+            ((Match.user_one_id == user_id) | (Match.user_two_id == user_id)),
+            Match.is_active == True
+        ).all()
+        return [
+            m.user_two_id if m.user_one_id == user_id else m.user_one_id
+            for m in matches
+        ]
+
