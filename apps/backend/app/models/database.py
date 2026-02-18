@@ -3,12 +3,15 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from app.core.config import settings
 
-# Railway PostgreSQL requires robust pool settings to handle connection drops
-# pool_pre_ping: validates connections before use (prevents "connection closed" errors)
-# pool_recycle: recycles connections every 5 min (avoids Railway idle timeout drops)
-# connect_args: sslmode=require is needed for Railway's managed PostgreSQL
+# Railway PostgreSQL connection notes:
+# - PRIVATE domain (*.railway.internal): NO SSL needed, direct internal connection
+# - PUBLIC domain (*.railway.app / proxy): SSL required
+# The DATABASE_URL from ${{Postgres.DATABASE_URL}} uses the private domain — no SSL needed.
 _connect_args = {}
-if settings.DATABASE_URL and "railway" in settings.DATABASE_URL:
+_db_url = settings.DATABASE_URL or ""
+
+# Only add SSL for public Railway URLs (not internal private domain)
+if "railway.app" in _db_url or ("railway" in _db_url and "railway.internal" not in _db_url):
     _connect_args = {"sslmode": "require"}
 
 engine = create_engine(
