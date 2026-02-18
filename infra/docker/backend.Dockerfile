@@ -20,6 +20,6 @@ COPY apps/backend /app
 
 EXPOSE 8000
 
-# Railway injects $PORT dynamically — default to 8000 for local Docker
-CMD uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000} --workers 1 --timeout-keep-alive 75
+# Railway injects $PORT dynamically — use sh -c to guarantee shell variable expansion
+CMD ["/bin/sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000} --workers 1 --timeout-keep-alive 75"]
 
