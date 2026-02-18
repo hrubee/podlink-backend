@@ -1,12 +1,16 @@
 fastapi==0.104.1
 uvicorn==0.24.0
-# CPU-only torch installed separately in Dockerfile for size optimization
-# torch==2.1.1+cpu
+# torch CPU-only is pre-installed in the Dockerfile before this file runs.
+# We pin it here so sentence-transformers cannot upgrade to the CUDA build.
+torch==2.1.1+cpu
 numpy==1.26.2
-sentence-transformers==2.2.2
+# sentence-transformers 2.7.x works with torch 2.1.x and doesn't force CUDA
+sentence-transformers==2.7.0
 faiss-cpu==1.7.4
 pandas==2.1.3
 scikit-learn==1.3.2
-huggingface-hub<0.26.0
+huggingface-hub>=0.20.0,<0.26.0
 httpx==0.25.2
 pydantic==2.5.0
+# Prevent torchvision from pulling in CUDA torch
+torchvision==0.16.1+cpu
