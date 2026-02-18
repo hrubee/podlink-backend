@@ -43,6 +43,18 @@ class MatchingService:
         self.db.commit()
         return False
 
+    async def handle_dislike(self, actor_id: str, target_id: str):
+        """Records a dislike — stored in DB as NCF negative signal, cached in Redis."""
+        interaction = Interaction(
+            actor_id=actor_id,
+            target_id=target_id,
+            interaction_type=InteractionType.DISLIKE
+        )
+        self.db.add(interaction)
+        # Cache so we don't re-show this person
+        self.redis.setex(f"dislikes:{actor_id}:{target_id}", 2592000, "1")
+        self.db.commit()
+
     async def _can_match(self, user_id: str) -> bool:
         """Checks if user is within their 30 rolling match limit."""
         limit_key = f"limits:matches:{user_id}"
