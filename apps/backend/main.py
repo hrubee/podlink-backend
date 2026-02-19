@@ -23,6 +23,11 @@ logger.info("Running database migrations (create_all)...")
 try:
     Base.metadata.create_all(bind=engine)
     logger.info("✅ Database tables ready.")
+
+    # Run auto-migration for missing columns (temp fix for prototype)
+    from app.migration_script import run_auto_migration
+    run_auto_migration(engine)
+
 except Exception as e:
     logger.error(f"❌ Database setup failed: {e}")
     raise  # Fail fast — don't start if DB is broken
