@@ -1,10 +1,11 @@
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, HTTPException
 from sqlalchemy.orm import Session
 import redis
 from app.services.chat_manager import manager
 from app.services.chat import ChatService
 from app.api import deps, auth_deps
 from app.models.user import User
+from pydantic import BaseModel
 import json
 
 router = APIRouter()
@@ -49,6 +50,42 @@ async def websocket_endpoint(
         print(f"WebSocket Error: {e}")
         manager.disconnect(user_id, websocket)
 
+
+class SendMessageRequest(BaseModel):
+    receiver_id: str
+    content: str
+
+@router.post("/send")
+async def send_message(
+    body: SendMessageRequest,
+    current_user: User = Depends(auth_deps.get_current_user),
+    db: Session = Depends(deps.get_db),
+    r: redis.Redis = Depends(deps.get_redis)
+):
+    """Send a message via REST (fallback for WS)."""
+    chat_service = ChatService(db, r)
+    try:
+        msg = await chat_service.send_message(
+            sender_id=str(current_user.id),
+            receiver_id=body.receiver_id,
+            content=body.content
+        )
+        return {"status": "success", "message_id": msg.id}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/conversations")
+async def get_conversations(
+    current_user: User = Depends(auth_deps.get_current_user),
+    db: Session = Depends(deps.get_db)
+):
+    """Get list of active conversations with last message snippet."""
+    # For MVP, we'll just return matches. In future, query ChatRoom.
+    # This is handled by the /matches endpoint for now.
+    return {"message": "Use /matches endpoint to get conversation list"}
+
 @router.get("/history/{other_user_id}")
 async def get_chat_history(
     other_user_id: str, 
@@ -61,6 +98,16 @@ async def get_chat_history(
     
     messages = db.query(ChatMessage).filter(
         ChatMessage.room_id == room_id
-    ).order_by(ChatMessage.created_at.desc()).limit(50).all()
+    ).order_by(ChatMessage.created_at.asc()).limit(50).all()
     
-    return messages
+    return [
+        {
+            "id": m.id,
+            "sender_id": m.sender_id,
+            "content": m.content,
+            "created_at": m.created_at,
+            "is_me": m.sender_id == current_user_id
+        }
+        for m in messages
+    ]
+

@@ -1,4 +1,4 @@
-from typing import Any, List, Optional
+from typing import Any, List, Optional, Dict
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app.api import deps, auth_deps
@@ -33,6 +33,29 @@ class OnboardingUpdate(BaseModel):
     social_links: dict = {}
     host_details: dict = {}
     guest_details: dict = {}
+
+
+class UserUpdate(BaseModel):
+    """Allow partial updates for profile editing"""
+    full_name: Optional[str] = None
+    bio: Optional[str] = None
+    avatar_url: Optional[str] = None
+    location: Optional[str] = None
+    timezone: Optional[str] = None
+    
+    topics: Optional[List[str]] = None
+    target_audience: Optional[str] = None
+    language: Optional[str] = None
+    engagement_style: Optional[List[str]] = None
+    
+    interview_format: Optional[str] = None
+    episode_length_pref: Optional[str] = None
+    content_rating: Optional[str] = None
+    fee_expectation: Optional[str] = None
+    
+    social_links: Optional[Dict] = None
+    host_details: Optional[Dict] = None
+    guest_details: Optional[Dict] = None
 
 
 @router.post("/onboarding", response_model=dict)
@@ -83,6 +106,28 @@ def submit_onboarding(
         raise HTTPException(status_code=500, detail=f"Failed to save onboarding data: {str(e)}")
 
 
+@router.put("/me", response_model=dict)
+def update_user_me(
+    data: UserUpdate,
+    current_user: User = Depends(auth_deps.get_current_user),
+    db: Session = Depends(deps.get_db)
+) -> Any:
+    """Update current user profile (partial update)"""
+    try:
+        # Update only fields that are provided (not None)
+        update_data = data.model_dump(exclude_unset=True)
+        
+        for field, value in update_data.items():
+            setattr(current_user, field, value)
+
+        db.commit()
+        db.refresh(current_user)
+        return {"status": "success", "message": "Profile updated"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to update profile: {str(e)}")
+
+
 @router.get("/me", response_model=dict)
 def get_my_profile(
     current_user: User = Depends(auth_deps.get_current_user)
@@ -119,11 +164,11 @@ def get_public_profile(
     """Publicly accessible profile information."""
     user = db.query(User).filter(
         User.id == user_id,
-        User.is_public == True,
         User.is_active == True
     ).first()
+    
     if not user:
-        raise HTTPException(status_code=404, detail="Profile not found or is private")
+        raise HTTPException(status_code=404, detail="Profile not found")
 
     return {
         "id": user.id,
@@ -144,10 +189,5 @@ def get_public_profile(
         "social_links": user.social_links,
         "host_details": user.host_details if user.role == UserRole.HOST else {},
         "guest_details": user.guest_details if user.role == UserRole.GUEST else {},
-        "managed_by": {
-            "id": user.managed_by_agency.id,
-            "name": user.managed_by_agency.name,
-            "slug": user.managed_by_agency.slug
-        } if user.managed_by_agency else None,
         "created_at": user.created_at
     }

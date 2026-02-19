@@ -12,7 +12,40 @@ from app.models.matches import Interaction, InteractionType, Match
 from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
-router = APIRouter()
+
+@router.get("/", response_model=dict)
+def get_matches(
+    current_user: User = Depends(auth_deps.get_current_user),
+    db: Session = Depends(deps.get_db),
+    r: redis.Redis = Depends(deps.get_redis)
+):
+    """Get list of active matches for the current user."""
+    service = MatchingService(db, r)
+    # 1. Get IDs from Redis/DB
+    print(f"DEBUG: Fetching matches for user {current_user.id}")
+    match_ids = service.get_active_matches(str(current_user.id))
+    
+    if not match_ids:
+        # Fallback for demo: if no matches, return empty list
+        return {"matches": []}
+
+    # 2. Fetch User Details
+    matched_users = db.query(User).filter(User.id.in_(match_ids)).all()
+    
+    # 3. Format Response
+    return {
+        "matches": [
+            {
+                "id": u.id,
+                "name": u.full_name,
+                "avatar": u.avatar_url,
+                "role": u.role,
+                "last_active": "Just now" # Placeholder
+            }
+            for u in matched_users
+        ]
+    }
+
 
 
 class LikeRequest(BaseModel):
