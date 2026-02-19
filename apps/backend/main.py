@@ -65,6 +65,7 @@ app.add_middleware(
         "http://localhost:3000",
         "http://localhost:3001",
         "https://podlink-frontend-production.up.railway.app",
+        "https://podlink.radianmedia.org",
     ],
     # Allow all Railway subdomains via regex
     allow_origin_regex="https://.*\.railway\.app",
