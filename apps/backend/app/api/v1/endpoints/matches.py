@@ -12,6 +12,7 @@ from app.models.matches import Interaction, InteractionType, Match
 from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
+router = APIRouter()
 
 @router.get("/", response_model=dict)
 def get_matches(
