@@ -55,7 +55,14 @@ if _domain and _domain != "localhost":
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Permissive for now — tighten in production
+    # Allow explicit localhost origins
+    allow_origins=[
+        "http://localhost:3000",
+        "http://localhost:3001",
+        "https://podlink-frontend-production.up.railway.app",
+    ],
+    # Allow all Railway subdomains via regex
+    allow_origin_regex="https://.*\.railway\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
