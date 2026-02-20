@@ -189,5 +189,13 @@ def get_public_profile(
         "social_links": user.social_links,
         "host_details": user.host_details if user.role == UserRole.HOST else {},
         "guest_details": user.guest_details if user.role == UserRole.GUEST else {},
+        "podcasts": [
+            {
+                "id": p.id,
+                "title": p.title,
+                "cover_image": p.cover_image,
+                "slug": p.slug
+            } for p in user.podcasts
+        ] if user.podcasts else [],
         "created_at": user.created_at
     }

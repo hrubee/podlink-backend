@@ -56,3 +56,6 @@ class User(Base):
     # ── Agency Links ──────────────────────────────────────────────────────────
     agency_id = Column(Integer, ForeignKey("agencies.id"), nullable=True)
     agencies = relationship("Agency", secondary="agency_members", back_populates="members")
+    
+    # ── Podcast Links ─────────────────────────────────────────────────────────
+    podcasts = relationship("Podcast", secondary="podcast_hosts", back_populates="hosts")

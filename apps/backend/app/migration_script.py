@@ -11,7 +11,9 @@ def run_auto_migration(engine: Engine):
     """
     logger.info("🔄 Checking database schema...")
     
-    # List of columns to add if they are missing
+    if engine.dialect.name == "sqlite":
+        logger.info("ℹ️ SQLite detected. Skipping manual column migration (create_all handles it).")
+        return
     # Format: (column_name, column_type)
     columns = [
         ("location", "TEXT"),
