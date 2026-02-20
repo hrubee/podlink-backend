@@ -97,6 +97,18 @@ def login_with_google(
                 role=user_role,
             )
             db.add(user)
+
+            # Auto-add them to the waitlist too (if not already there)
+            from app.models.marketing import WaitlistEntry
+            waitlist_entry = db.query(WaitlistEntry).filter(WaitlistEntry.email == email).first()
+            if not waitlist_entry:
+                new_waitlist = WaitlistEntry(
+                    email=email,
+                    fullName=name,
+                    role_interest=str(user_role.value) if hasattr(user_role, 'value') else str(user_role)
+                )
+                db.add(new_waitlist)
+                
             db.commit()
             db.refresh(user)
 
