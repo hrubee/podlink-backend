@@ -14,6 +14,7 @@ from app.models.safety import UserReport, AuditLog
 from app.models.matches import Match
 from app.models.agency import Agency
 from app.models.marketing import WaitlistEntry
+from app.models.podcast import Podcast
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -35,7 +36,7 @@ except Exception as e:
 from app.core.middleware import ObservabilityMiddleware, setup_exception_handlers
 
 app = FastAPI(
-    title="PodMatch.AI API",
+    title="PodLink.AI API",
     description="AI-powered podcast host-guest matching platform",
     version="1.0.0",
 )
@@ -85,12 +86,16 @@ app.include_router(agency.router, prefix="/v1/agency", tags=["Agency"])
 app.include_router(discovery.router, prefix="/v1/discovery", tags=["Discovery"])
 app.include_router(marketing.router, prefix="/v1/marketing", tags=["Marketing"])
 
+# Dynamic Import to avoid cycle
+from app.api.v1.endpoints import podcast
+app.include_router(podcast.router, prefix="/v1/podcasts", tags=["Podcasts"])
+
 
 @app.get("/")
 def read_root():
     return {
         "status": "online",
-        "service": "PodMatch.AI Core Backend",
+        "service": "PodLink.AI Core Backend",
         "version": "1.0.0",
         "redis": "connected" if settings.REDIS_URL else "disabled",
         "ml_service": settings.ML_SERVICE_URL,
