@@ -9,6 +9,8 @@ from app.core.config import settings
 from app.models.user import User, UserRole
 from pydantic import BaseModel, EmailStr
 from datetime import datetime
+from google.oauth2 import id_token
+from google.auth.transport import requests as google_requests
 
 router = APIRouter()
 
@@ -16,6 +18,10 @@ class UserCreate(BaseModel):
     email: EmailStr
     password: str
     full_name: str
+    role: UserRole = UserRole.GUEST
+
+class GoogleLogin(BaseModel):
+    token: str
     role: UserRole = UserRole.GUEST
 
 class UserOut(BaseModel):
@@ -62,6 +68,57 @@ def login_access_token(
         ),
         "token_type": "bearer",
     }
+
+@router.post("/google")
+def login_with_google(
+    payload: GoogleLogin, db: Session = Depends(deps.get_db)
+) -> Any:
+    try:
+        # Verify the Google JWT token
+        idinfo = id_token.verify_oauth2_token(
+            payload.token, google_requests.Request(), settings.GOOGLE_CLIENT_ID, clock_skew_in_seconds=10
+        )
+        email = idinfo.get("email")
+        name = idinfo.get("name")
+        
+        if not email:
+            raise HTTPException(status_code=400, detail="Google token does not contain an email")
+
+        # Check if user exists
+        user = db.query(User).filter(User.email == email).first()
+        
+        if not user:
+            # Create user if not exists
+            user_role = payload.role if payload.role else UserRole.GUEST
+            user = User(
+                email=email,
+                hashed_password=security.get_password_hash(security.get_random_string(32)), # Random password for google users
+                full_name=name,
+                role=user_role,
+            )
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+
+        elif not user.is_active or user.is_deleted:
+            raise HTTPException(status_code=400, detail="Inactive user")
+
+        access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+        return {
+            "access_token": security.create_access_token(
+                user.id, expires_delta=access_token_expires
+            ),
+            "token_type": "bearer",
+            "user": {
+                "id": user.id,
+                "email": user.email,
+                "full_name": user.full_name,
+                "role": user.role,
+                "onboarded": user.onboarded
+            }
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid Google token: {str(e)}")
 
 @router.delete("/me", status_code=status.HTTP_204_NO_CONTENT)
 def delete_my_data(

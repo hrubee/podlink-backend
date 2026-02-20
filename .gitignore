@@ -25,3 +25,4 @@ env/
 
 # MyPy
 .mypy_cache/
+dev.db

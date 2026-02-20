@@ -22,3 +22,9 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 
 def get_password_hash(password: str) -> str:
     return pwd_context.hash(password)
+
+import secrets
+import string
+
+def get_random_string(length: int = 32) -> str:
+    return "".join(secrets.choice(string.ascii_letters + string.digits) for _ in range(length))
