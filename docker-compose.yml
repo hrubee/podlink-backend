@@ -32,7 +32,6 @@ services:
       - RAZORPAY_KEY_ID=${RAZORPAY_KEY_ID}
       - RAZORPAY_KEY_SECRET=${RAZORPAY_KEY_SECRET}
       - RAZORPAY_WEBHOOK_SECRET=${RAZORPAY_WEBHOOK_SECRET}
-      - PODCHASER_API_KEY=${PODCHASER_API_KEY}
       - ACCESS_TOKEN_EXPIRE_MINUTES=${ACCESS_TOKEN_EXPIRE_MINUTES:-11520}
     depends_on:
       - db
@@ -49,23 +48,6 @@ services:
       - ./libs/shared/python:/libs/shared
     ports:
       - "8001:8001"
-
-  ingestion-service:
-    build:
-      context: .
-      dockerfile: infra/docker/ingestion.Dockerfile
-    volumes:
-      - ./apps/ingestion-service:/app
-    environment:
-      - DATABASE_URL=${DATABASE_URL}
-      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
-      - PODCHASER_API_KEY=${PODCHASER_API_KEY}
-      - PODCHASER_API_SECRET=${PODCHASER_API_SECRET}
-    depends_on:
-      - db
-      - redis
-    ports:
-      - "8002:8002"
 
 volumes:
   postgres_data:

@@ -16,14 +16,9 @@ class Settings(BaseSettings):
     GOOGLE_CLIENT_ID: str = ""
     GOOGLE_CLIENT_SECRET: str = ""
 
-    # Podchaser
-    PODCHASER_API_KEY: str = ""
-    PODCHASER_API_SECRET: str = ""
-
     # Internal service URLs — override these in Railway env vars
     # In Docker Compose they use service names; in Railway use the public URLs
     ML_SERVICE_URL: str = "http://ml-service:8001"
-    INGESTION_SERVICE_URL: str = "http://ingestion-service:8002"
 
     class Config:
         env_file = ".env"

@@ -2,22 +2,15 @@ from fastapi import APIRouter, HTTPException, Depends
 from typing import List, Optional
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, func
-try:
-    import httpx
-except ImportError:
-    httpx = None
 import logging
+
 from app.api.auth_deps import get_current_user
 from app.api.deps import get_db
 from app.models.user import User
-
-from app.core.config import settings as _app_settings
+from app.models.podcast import Podcast
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
-
-INGESTION_SERVICE_URL = _app_settings.INGESTION_SERVICE_URL
-
 
 @router.get("/search/profiles")
 async def search_profiles(
@@ -28,12 +21,10 @@ async def search_profiles(
     db: Session = Depends(get_db)
 ):
     """
-    Search for podcast hosts and guests.
-    Prioritizes local database (seeded users) and falls back to Podchaser.
+    Search for podcast hosts and guests directly from the internal database.
     """
     profiles = []
     
-    # 1. Search Local Database First (Optimized for filters)
     try:
         query = db.query(User).filter(User.is_public == True)
         
@@ -58,35 +49,12 @@ async def search_profiles(
                 "name": display_name,
                 "bio": u.bio,
                 "image_url": f"https://ui-avatars.com/api/?name={safe_name}&background=6366f1&color=fff",
-                "subtitle": f"{'Host' if u.role == 'HOST' else 'Guest'} • {u.location}",
-                "topics": u.topics,
+                "subtitle": f"{'Host' if u.role == 'HOST' else 'Guest'} • {u.location or 'Global'}",
+                "topics": u.topics or [],
                 "type": "internal"
             })
     except Exception as e:
-        logger.warning(f"Local search failed: {e}")
-
-    # 2. Fetch from External Service (Podchaser) if we need more results
-    if len(profiles) < limit and httpx:
-        try:
-            async with httpx.AsyncClient(timeout=5.0) as client:
-                response = await client.get(
-                    f"{INGESTION_SERVICE_URL}/search/creators",
-                    params={"q": q, "limit": limit - len(profiles)}
-                )
-                if response.status_code == 200:
-                    data = response.json()
-                    creators = data.get("creators", {}).get("data", [])
-                    for creator in creators:
-                        profiles.append({
-                            "id": creator.get("pcid"),
-                            "name": creator.get("name"),
-                            "bio": creator.get("bio", ""),
-                            "image_url": creator.get("imageUrl"),
-                            "subtitle": creator.get("subtitleShort", "Podcast Creator"),
-                            "type": "external"
-                        })
-        except Exception as e:
-            logger.error(f"External search failed: {e}")
+        logger.error(f"Local profile search failed: {e}")
 
     return {
         "profiles": profiles,
@@ -100,50 +68,35 @@ async def discover_trending(
     db: Session = Depends(get_db)
 ):
     """
-    Discover trending podcasts and their hosts.
-    Falls back to high-quality internal profiles if service is down.
+    Discover trending podcasts internally.
     """
     items = []
-    
-    # 1. Try External Discovery
-    if httpx:
-        try:
-            async with httpx.AsyncClient(timeout=5.0) as client:
-                response = await client.get(
-                    f"{INGESTION_SERVICE_URL}/discover/trending",
-                    params={"limit": limit}
-                )
-                if response.status_code == 200:
-                    data = response.json()
-                    podcasts = data.get("podcasts", {}).get("data", [])
-                    for podcast in podcasts:
-                        items.append({
-                            "id": podcast.get("id"),
-                            "title": podcast.get("title"),
-                            "description": podcast.get("description", ""),
-                            "image_url": podcast.get("imageUrl"),
-                            "rating": podcast.get("ratingAverage"),
-                            "categories": [c.get("title") for c in podcast.get("categories", [])],
-                            "type": "podcast"
-                        })
-                    return {"items": items}
-        except Exception as e:
-            logger.warning(f"External trending failed: {e}")
-
-    # 2. Hybrid Fallback: Return featured internal accounts
     try:
-        featured = db.query(User).filter(User.onboarded == True).limit(limit).all()
-        for u in featured:
+        podcasts = db.query(Podcast).limit(limit).all()
+        for p in podcasts:
             items.append({
-                "id": str(u.id),
-                "title": u.full_name,
-                "description": u.bio,
-                "image_url": f"https://ui-avatars.com/api/?name={u.full_name.replace(' ', '+')}&size=200&background=6366f1&color=fff",
-                "categories": u.topics[:3] if u.topics else ["Podcast"],
-                "type": "featured_profile"
+                "id": str(p.id),
+                "title": p.title,
+                "description": p.description or "",
+                "image_url": p.cover_image or f"https://ui-avatars.com/api/?name={p.title.replace(' ', '+')}&size=200&background=6366f1&color=fff",
+                "categories": p.topics[:3] if p.topics else ["Podcast"],
+                "type": "podcast"
             })
+            
+        # Fallback to featuring active hosts
+        if len(items) < limit:
+            featured = db.query(User).filter(User.role == "HOST", User.onboarded == True).limit(limit - len(items)).all()
+            for u in featured:
+                items.append({
+                    "id": str(u.id),
+                    "title": u.host_details.get("podcast_name", f"{u.full_name}'s Podcast") if u.host_details else f"{u.full_name}'s Podcast",
+                    "description": u.bio or "",
+                    "image_url": f"https://ui-avatars.com/api/?name={u.full_name.replace(' ', '+')}&size=200&background=6366f1&color=fff",
+                    "categories": u.topics[:3] if u.topics else ["Podcast"],
+                    "type": "featured_profile"
+                })
     except Exception as e:
-        logger.error(f"Fallback trending failed: {e}")
+        logger.error(f"Internal trending search failed: {e}")
 
     return {"items": items}
 
@@ -154,111 +107,78 @@ async def get_profile_details(
     db: Session = Depends(get_db)
 ):
     """
-    Get detailed profile information.
-    Handles both internal UUIDs and external PCIDs.
+    Get detailed profile information from internal DB.
     """
-    # 1. Try Internal First
     try:
         user = db.query(User).filter(User.id == int(profile_id) if profile_id.isdigit() else None).first()
         if user:
+            safe_name = user.full_name.replace(' ', '+') if user.full_name else "User"
             return {
                 "id": str(user.id),
                 "name": user.full_name,
                 "bio": user.bio,
-                "image_url": f"https://ui-avatars.com/api/?name={user.full_name.replace(' ', '+')}&size=300",
+                "image_url": user.avatar_url or f"https://ui-avatars.com/api/?name={safe_name}&size=300",
                 "location": user.location,
-                "social_links": {"twitter": "#", "linkedin": "#"},
+                "social_links": user.social_links or {},
                 "podcast_appearances": [],
                 "type": "internal"
             }
-    except:
-        pass
-
-    # 2. Try External
-    if not httpx:
-        raise HTTPException(status_code=404, detail="Profile not found")
-
-    try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            response = await client.get(f"{INGESTION_SERVICE_URL}/creator/{profile_id}")
-            if response.status_code == 200:
-                data = response.json()
-                creator = data.get("creator", {})
-                return {
-                    "id": creator.get("pcid"),
-                    "name": creator.get("name"),
-                    "bio": creator.get("bio", ""),
-                    "image_url": creator.get("imageUrl"),
-                    "location": creator.get("location"),
-                    "social_links": creator.get("socialLinks", {}),
-                    "podcast_appearances": [],
-                    "type": "external"
-                }
     except Exception as e:
-        logger.error(f"External profile fetch failed: {e}")
+        logger.error(f"Profile fetch failed: {e}")
 
     raise HTTPException(status_code=404, detail="Profile not found")
-
 
 @router.get("/search/podcasts")
 async def search_podcasts(
     q: str,
     limit: int = 20,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
 ):
-    """Search for podcasts via ingestion service."""
-    if not httpx:
-        return {"podcasts": [], "total": 0}
-        
+    """Search for podcasts internally."""
+    results = []
     try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            response = await client.get(
-                f"{INGESTION_SERVICE_URL}/search/podcasts",
-                params={"q": q, "limit": limit}
+        query = db.query(Podcast).filter(
+            or_(
+                Podcast.title.ilike(f"%{q}%"),
+                Podcast.description.ilike(f"%{q}%"),
+                Podcast.topics.cast(str).ilike(f"%{q}%")
             )
-            if response.status_code == 200:
-                data = response.json()
-                podcasts = data.get("podcasts", {}).get("data", [])
-                results = []
-                for p in podcasts:
-                    results.append({
-                        "id": p.get("id"),
-                        "title": p.get("title"),
-                        "description": p.get("description", ""),
-                        "image_url": p.get("imageUrl"),
-                        "rating": p.get("ratingAverage"),
-                        "categories": [c.get("title") for c in p.get("categories", [])]
-                    })
-                return {"podcasts": results, "total": len(results)}
+        )
+        podcasts = query.limit(limit).all()
+        for p in podcasts:
+            results.append({
+                "id": str(p.id),
+                "title": p.title,
+                "description": p.description or "",
+                "image_url": p.cover_image or f"https://ui-avatars.com/api/?name={p.title.replace(' ', '+')}&size=200&background=6366f1&color=fff",
+                "categories": p.topics[:3] if p.topics else ["Podcast"]
+            })
     except Exception as e:
         logger.error(f"Podcast search failed: {e}")
         
-    return {"podcasts": [], "total": 0}
+    return {"podcasts": results, "total": len(results)}
 
 @router.get("/podcast/{podcast_id}")
 async def get_podcast_details(
     podcast_id: str,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
 ):
-    """Get podcast details via ingestion service."""
-    if not httpx:
-        raise HTTPException(status_code=503, detail="Discovery service offline")
-        
+    """Get podcast details internally."""
     try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            response = await client.get(f"{INGESTION_SERVICE_URL}/podcast/{podcast_id}")
-            if response.status_code == 200:
-                data = response.json()
-                podcast = data.get("podcast", {})
-                return {
-                    "id": podcast.get("id"),
-                    "title": podcast.get("title"),
-                    "description": podcast.get("description", ""),
-                    "image_url": podcast.get("imageUrl"),
-                    "rating": podcast.get("ratingAverage"),
-                    "categories": [c.get("title") for c in podcast.get("categories", [])],
-                    "type": "podcast"
-                }
+        podcast = db.query(Podcast).filter(Podcast.id == int(podcast_id) if podcast_id.isdigit() else None).first()
+        if podcast:
+            return {
+                "id": str(podcast.id),
+                "title": podcast.title,
+                "description": podcast.description or "",
+                "image_url": podcast.cover_image or f"https://ui-avatars.com/api/?name={podcast.title.replace(' ', '+')}&size=200&background=6366f1&color=fff",
+                "categories": podcast.topics[:3] if podcast.topics else ["Podcast"],
+                "type": "podcast",
+                "website_url": podcast.website_url,
+                "rss_feed_url": podcast.rss_feed_url
+            }
     except Exception as e:
         logger.error(f"Podcast fetch failed: {e}")
         
