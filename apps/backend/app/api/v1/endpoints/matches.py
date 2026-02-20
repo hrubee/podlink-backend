@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 @router.get("/", response_model=dict)
-def get_matches(
+async def get_matches(
     current_user: User = Depends(auth_deps.get_current_user),
     db: Session = Depends(deps.get_db),
     r: redis.Redis = Depends(deps.get_redis)
@@ -24,7 +24,7 @@ def get_matches(
     service = MatchingService(db, r)
     # 1. Get IDs from Redis/DB
     print(f"DEBUG: Fetching matches for user {current_user.id}")
-    match_ids = service.get_active_matches(str(current_user.id))
+    match_ids = await service.get_active_matches(str(current_user.id))
     
     if not match_ids:
         # Fallback for demo: if no matches, return empty list
