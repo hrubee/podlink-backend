@@ -14,14 +14,21 @@ _db_url = settings.DATABASE_URL or ""
 if "railway.app" in _db_url or ("railway" in _db_url and "railway.internal" not in _db_url):
     _connect_args = {"sslmode": "require"}
 
-engine = create_engine(
-    settings.DATABASE_URL,
-    pool_pre_ping=True,
-    pool_recycle=300,
-    pool_size=5,
-    max_overflow=10,
-    connect_args=_connect_args,
-)
+if _db_url.startswith("sqlite"):
+    engine = create_engine(
+        settings.DATABASE_URL,
+        connect_args={"check_same_thread": False},
+    )
+else:
+    engine = create_engine(
+        settings.DATABASE_URL,
+        pool_pre_ping=True,
+        pool_recycle=300,
+        pool_size=5,
+        max_overflow=10,
+        connect_args=_connect_args,
+    )
+
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 Base = declarative_base()
