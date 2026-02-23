@@ -31,7 +31,9 @@ async def get_matches(
         return {"matches": []}
 
     # 2. Fetch User Details
-    matched_users = db.query(User).filter(User.id.in_(match_ids)).all()
+    # Cast match IDs to ints because User.id is Integer
+    int_match_ids = [int(mid) for mid in match_ids if str(mid).isdigit()]
+    matched_users = db.query(User).filter(User.id.in_(int_match_ids)).all()
     
     # 3. Format Response
     return {
