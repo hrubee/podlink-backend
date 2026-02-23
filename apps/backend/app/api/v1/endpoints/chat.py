@@ -111,3 +111,21 @@ async def get_chat_history(
         for m in messages
     ]
 
+
+@router.delete("/history/{other_user_id}")
+async def delete_chat_history(
+    other_user_id: str,
+    current_user: User = Depends(auth_deps.get_current_user),
+    db: Session = Depends(deps.get_db)
+):
+    """Delete all messages in the chat room between the current user and other_user_id."""
+    from app.models.chat import ChatMessage
+    current_user_id = str(current_user.id)
+    room_id = "-".join(sorted([current_user_id, other_user_id]))
+
+    deleted_count = db.query(ChatMessage).filter(
+        ChatMessage.room_id == room_id
+    ).delete(synchronize_session=False)
+
+    db.commit()
+    return {"status": "success", "deleted_messages": deleted_count}
