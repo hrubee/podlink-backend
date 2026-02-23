@@ -105,7 +105,7 @@ async def get_chat_history(
             "id": m.id,
             "sender_id": m.sender_id,
             "content": m.content,
-            "created_at": m.created_at,
+            "timestamp": m.created_at.isoformat() if m.created_at else None,
             "is_me": m.sender_id == current_user_id
         }
         for m in messages

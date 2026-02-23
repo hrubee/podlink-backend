@@ -26,8 +26,14 @@ class ChatService:
                 Match.is_active == True
             ).first()
             if not match_exists:
-                raise ValueError("Users must be matched to exchange messages.")
-
+                # Auto-create match for direct messaging in MVP (like from Press Kit)
+                new_match = Match(user_one_id=sender_id, user_two_id=receiver_id, is_active=True)
+                self.db.add(new_match)
+                self.db.commit()
+                
+                # Cache match in Redis
+                self.redis.sadd(match_key, receiver_id)
+                self.redis.sadd(f"active_matches:{receiver_id}", sender_id)
         # 2. Moderation check
         is_flagged = self._check_moderation(content)
 
