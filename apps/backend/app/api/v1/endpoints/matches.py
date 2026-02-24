@@ -340,5 +340,18 @@ async def unmatch_user(
     r: redis.Redis = Depends(deps.get_redis)
 ):
     service = MatchingService(db, r)
-    await service.unmatch(str(current_user.id), request.target_id)
-    return {"status": "success", "message": "Unmatched."}
+    current_user_id = str(current_user.id)
+    target_id_str = str(request.target_id)
+
+    # 1. Remove the match (sets is_active=False for BOTH users)
+    await service.unmatch(current_user_id, target_id_str)
+
+    # 2. Also wipe all chat messages in the shared room for both sides
+    from app.models.chat import ChatMessage
+    room_id = "-".join(sorted([current_user_id, target_id_str]))
+    db.query(ChatMessage).filter(
+        ChatMessage.room_id == room_id
+    ).delete(synchronize_session=False)
+    db.commit()
+
+    return {"status": "success", "message": "Unmatched and chat cleared for both users."}
