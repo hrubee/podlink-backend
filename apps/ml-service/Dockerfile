@@ -8,7 +8,7 @@ WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     TOKENIZERS_PARALLELISM=false \
-    TRANSFORMERS_CACHE=/app/.cache/huggingface \
+    HF_HOME=/app/.cache/huggingface \
     SENTENCE_TRANSFORMERS_HOME=/app/.cache/sentence_transformers \
     # Force pip to use the CPU index for torch packages
     PIP_EXTRA_INDEX_URL=https://download.pytorch.org/whl/cpu
