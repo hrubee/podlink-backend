@@ -36,7 +36,7 @@ RUN mkdir -p /app/registry
 
 ENV PYTHONPATH="/app"
 
-EXPOSE 8001
+EXPOSE 8080
 
 # sh -c ensures $PORT is shell-expanded (Railway injects PORT at runtime)
-CMD ["/bin/sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT:-8001} --workers 1 --timeout-keep-alive 75"]
+CMD ["/bin/sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT:-8080} --workers 1 --timeout-keep-alive 75"]
