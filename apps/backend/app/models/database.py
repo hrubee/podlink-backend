@@ -22,10 +22,12 @@ if _db_url.startswith("sqlite"):
 else:
     engine = create_engine(
         settings.DATABASE_URL,
-        pool_pre_ping=True,
-        pool_recycle=300,
-        pool_size=5,
-        max_overflow=10,
+        pool_pre_ping=True,        # Verify connection health before use
+        pool_recycle=300,          # Recycle connections after 5 minutes (avoids Railway's idle timeout)
+        pool_size=5,               # Maintain 5 persistent connections
+        max_overflow=15,           # Allow up to 15 extra connections during bursts
+        pool_timeout=10,           # Raise error (not hang) if pool exhausted for > 10s
+        pool_reset_on_return="rollback",  # Roll back any uncommitted state on return
         connect_args=_connect_args,
     )
 

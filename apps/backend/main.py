@@ -1,5 +1,6 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
 import logging
 import os
 
@@ -19,30 +20,38 @@ from app.models.podcast import Podcast
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# ── Sentry ────────────────────────────────────────────────────────────────────
+if settings.SENTRY_DSN:
+    import sentry_sdk
+    from sentry_sdk.integrations.fastapi import FastApiIntegration
+    from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
+    sentry_sdk.init(
+        dsn=settings.SENTRY_DSN,
+        integrations=[FastApiIntegration(), SqlalchemyIntegration()],
+        traces_sample_rate=0.2,     # Capture 20% of transactions for performance monitoring
+        profiles_sample_rate=0.1,   # Capture 10% for profiling
+        environment=os.getenv("RAILWAY_ENVIRONMENT", "development"),
+        send_default_pii=False,
+    )
+    logger.info("✅ Sentry initialized.")
+else:
+    logger.info("Sentry DSN not set — error monitoring disabled.")
+
 # ── Schema Management ─────────────────────────────────────────────────────────
 # On Railway: `alembic upgrade head` runs automatically via the deploy command.
-# For local SQLite dev: create_all is still run as a convenience so developers
-# don't have to manually run migrations against a throwaway DB.
-from app.core.config import settings as _settings
-
-if _settings.DATABASE_URL.startswith("sqlite"):
+# For local SQLite dev: create_all is still run as a convenience.
+if settings.DATABASE_URL.startswith("sqlite"):
     logger.info("SQLite detected — running create_all for local dev convenience.")
     try:
         from app.models.database import engine, Base
-        from app.models.user import User
-        from app.models.chat import ChatMessage, ChatRoom
-        from app.models.safety import UserReport, AuditLog
-        from app.models.matches import Match, Interaction
-        from app.models.agency import Agency
-        from app.models.marketing import WaitlistEntry
-        from app.models.podcast import Podcast
+        from app.models.matches import Interaction
         Base.metadata.create_all(bind=engine)
         logger.info("✅ SQLite tables ready.")
     except Exception as e:
         logger.error(f"❌ SQLite setup failed: {e}")
         raise
 else:
-    logger.info("PostgreSQL detected — schema managed by Alembic. Run 'alembic upgrade head' to migrate.")
+    logger.info("PostgreSQL detected — schema managed by Alembic.")
 
 from app.core.middleware import ObservabilityMiddleware, setup_exception_handlers
 
@@ -52,55 +61,64 @@ app = FastAPI(
     version="1.0.0",
 )
 
-# Observability middleware
+# ── Security Headers Middleware ────────────────────────────────────────────────
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    """Add security headers to every response."""
+    async def dispatch(self, request: Request, call_next):
+        response: Response = await call_next(request)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["X-XSS-Protection"] = "1; mode=block"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+        if not settings.DATABASE_URL.startswith("sqlite"):
+            # Only add HSTS in production (not local dev)
+            response.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains"
+        return response
+
+app.add_middleware(SecurityHeadersMiddleware)
+
+# ── Observability Middleware ───────────────────────────────────────────────────
 app.add_middleware(ObservabilityMiddleware)
 setup_exception_handlers(app)
 
-# CORS — allow the frontend domain + localhost for development
-# On Railway, NEXT_PUBLIC_API_URL is the frontend URL
-_allowed_origins = [
-    "http://localhost:3000",
-    "http://localhost:3001",
-    "https://*.up.railway.app",  # All Railway preview URLs
-    "https://*.railway.app",
-]
-# Add custom domain if DOMAIN env var is set
-_domain = os.getenv("DOMAIN", "")
-if _domain and _domain != "localhost":
-    _allowed_origins.append(f"https://{_domain}")
-    _allowed_origins.append(f"http://{_domain}")
+# ── CORS ─────────────────────────────────────────────────────────────────────
+_custom_domain = os.getenv("DOMAIN", "")
+_extra_origins = []
+if _custom_domain and _custom_domain != "localhost":
+    _extra_origins = [f"https://{_custom_domain}", f"http://{_custom_domain}"]
 
 app.add_middleware(
     CORSMiddleware,
-    # Allow explicit localhost origins
     allow_origins=[
         "http://localhost:3000",
         "http://localhost:3001",
         "https://podlink-frontend-production.up.railway.app",
         "https://podlink.radianmedia.org",
+        *_extra_origins,
     ],
-    # Allow all Railway subdomains via regex
-    allow_origin_regex="https://.*\.railway\.app",
+    allow_origin_regex=r"https://.*\.railway\.app",
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "Accept", "Origin", "X-Requested-With"],
 )
 
-# Routers
-app.include_router(auth.router, prefix="/v1", tags=["Authentication"])
-app.include_router(users.router, prefix="/v1/users", tags=["Users"])
-app.include_router(matches.router, prefix="/v1/matches", tags=["Matching"])
-app.include_router(payments.router, prefix="/v1/payments", tags=["Payments"])
-app.include_router(chat.router, prefix="/v1/chat", tags=["Chat"])
-app.include_router(admin.router, prefix="/v1/admin", tags=["Admin"])
-app.include_router(agency.router, prefix="/v1/agency", tags=["Agency"])
+# ── Routers ───────────────────────────────────────────────────────────────────
+app.include_router(auth.router,      prefix="/v1",           tags=["Authentication"])
+app.include_router(users.router,     prefix="/v1/users",     tags=["Users"])
+app.include_router(matches.router,   prefix="/v1/matches",   tags=["Matching"])
+app.include_router(payments.router,  prefix="/v1/payments",  tags=["Payments"])
+app.include_router(chat.router,      prefix="/v1/chat",      tags=["Chat"])
+app.include_router(admin.router,     prefix="/v1/admin",     tags=["Admin"])
+app.include_router(agency.router,    prefix="/v1/agency",    tags=["Agency"])
 app.include_router(discovery.router, prefix="/v1/discovery", tags=["Discovery"])
 app.include_router(marketing.router, prefix="/v1/marketing", tags=["Marketing"])
 
-# Dynamic Import to avoid cycle
 from app.api.v1.endpoints import podcast
-app.include_router(podcast.router, prefix="/v1/podcasts", tags=["Podcasts"])
+app.include_router(podcast.router,   prefix="/v1/podcasts",  tags=["Podcasts"])
 
+
+# ── Health Checks ─────────────────────────────────────────────────────────────
 
 @app.get("/")
 def read_root():
@@ -109,7 +127,8 @@ def read_root():
         "service": "PodLink.AI Core Backend",
         "version": "1.0.0",
         "redis": "connected" if settings.REDIS_URL else "disabled",
-        "ml_service": settings.ML_SERVICE_URL,
+        "ml_service": settings.ML_SERVICE_URL or "not configured",
+        "sentry": "enabled" if settings.SENTRY_DSN else "disabled",
     }
 
 
@@ -117,3 +136,21 @@ def read_root():
 def health_check():
     """Railway health check endpoint."""
     return {"status": "ok"}
+
+
+@app.get("/health/db")
+def health_db():
+    """
+    Deep health check: verifies the database connection is live.
+    Used for monitoring dashboards (not Railway's startup health check —
+    that uses the lightweight /health endpoint).
+    """
+    from sqlalchemy import text
+    from app.models.database import engine
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+        return {"status": "ok", "database": "connected"}
+    except Exception as e:
+        logger.error(f"DB health check failed: {e}")
+        return {"status": "error", "database": str(e)}

@@ -1,0 +1,15 @@
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+# Only check what matters — not stylistic preferences
+select = ["E", "F", "W", "I"]
+ignore = [
+    "E501",  # Line too long — handled by formatter
+    "F401",  # Unused imports — FastAPI pattern has many convenient re-exports
+]
+exclude = [
+    "alembic/",
+    "tests/",
+    "venv/",
+    ".venv/",
+]

@@ -26,6 +26,9 @@ class Settings(BaseSettings):
     GOOGLE_CLIENT_ID: str = ""
     GOOGLE_CLIENT_SECRET: str = ""
 
+    # Observability
+    SENTRY_DSN: Optional[str] = None   # Set in Railway: https://xxx@sentry.io/yyy
+
     # Internal service URLs — MUST be overridden in Railway env vars
     # Default is empty string so it fails loudly instead of silently hitting a Docker hostname
     ML_SERVICE_URL: str = Field(
