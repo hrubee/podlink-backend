@@ -18,6 +18,9 @@ class Settings(BaseSettings):
     RAZORPAY_KEY_ID: str = "not_configured"
     RAZORPAY_KEY_SECRET: str = "not_configured"
     RAZORPAY_WEBHOOK_SECRET: str = "not_configured"
+    RAZORPAY_PRO_PLAN_ID: str = ""      # Set in Railway: plan_XXXXXXXXXXXXXXXX
+    RAZORPAY_AGENCY_PLAN_ID: str = ""   # Set in Railway: plan_XXXXXXXXXXXXXXXX
+
 
     # Google OAuth
     GOOGLE_CLIENT_ID: str = ""

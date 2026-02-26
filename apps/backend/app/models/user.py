@@ -49,6 +49,10 @@ class User(Base):
     deleted_at = Column(DateTime, nullable=True)
     is_public = Column(Boolean, default=True)
 
+    # ── Subscription / Billing ────────────────────────────────────────────────
+    subscription_status = Column(String, default="free")          # free | pro | agency
+    subscription_ends_at = Column(DateTime(timezone=True), nullable=True)
+
     # ── Tracking ──────────────────────────────────────────────────────────────
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
