@@ -19,19 +19,30 @@ from app.models.podcast import Podcast
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Auto-create all tables on startup (idempotent — safe to run on every deploy)
-logger.info("Running database migrations (create_all)...")
-try:
-    Base.metadata.create_all(bind=engine)
-    logger.info("✅ Database tables ready.")
+# ── Schema Management ─────────────────────────────────────────────────────────
+# On Railway: `alembic upgrade head` runs automatically via the deploy command.
+# For local SQLite dev: create_all is still run as a convenience so developers
+# don't have to manually run migrations against a throwaway DB.
+from app.core.config import settings as _settings
 
-    # Run auto-migration for missing columns (temp fix for prototype)
-    from app.migration_script import run_auto_migration
-    run_auto_migration(engine)
-
-except Exception as e:
-    logger.error(f"❌ Database setup failed: {e}")
-    raise  # Fail fast — don't start if DB is broken
+if _settings.DATABASE_URL.startswith("sqlite"):
+    logger.info("SQLite detected — running create_all for local dev convenience.")
+    try:
+        from app.models.database import engine, Base
+        from app.models.user import User
+        from app.models.chat import ChatMessage, ChatRoom
+        from app.models.safety import UserReport, AuditLog
+        from app.models.matches import Match, Interaction
+        from app.models.agency import Agency
+        from app.models.marketing import WaitlistEntry
+        from app.models.podcast import Podcast
+        Base.metadata.create_all(bind=engine)
+        logger.info("✅ SQLite tables ready.")
+    except Exception as e:
+        logger.error(f"❌ SQLite setup failed: {e}")
+        raise
+else:
+    logger.info("PostgreSQL detected — schema managed by Alembic. Run 'alembic upgrade head' to migrate.")
 
 from app.core.middleware import ObservabilityMiddleware, setup_exception_handlers
 

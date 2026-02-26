@@ -1,6 +1,6 @@
 from datetime import timedelta
 from typing import Any
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from app.api import deps, auth_deps
@@ -11,8 +11,28 @@ from pydantic import BaseModel, EmailStr
 from datetime import datetime
 from google.oauth2 import id_token
 from google.auth.transport import requests as google_requests
+import redis
+import time
 
 router = APIRouter()
+
+
+def _check_rate_limit(r: redis.Redis, key: str, max_attempts: int = 10, window_seconds: int = 900):
+    """Sliding-window rate limiter. Raises 429 if limit exceeded. No-ops if Redis is unavailable."""
+    from app.api.deps import NoOpRedis
+    if isinstance(r, NoOpRedis):
+        return  # Redis not configured — allow all (fail open)
+    now = time.time()
+    window_start = now - window_seconds
+    r.zremrangebyscore(key, 0, window_start)
+    count = r.zcard(key)
+    if count >= max_attempts:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Too many attempts. Please try again in {window_seconds // 60} minutes."
+        )
+    r.zadd(key, {str(now): now})
+    r.expire(key, window_seconds)
 
 class UserCreate(BaseModel):
     email: EmailStr
@@ -35,11 +55,19 @@ class UserOut(BaseModel):
         from_attributes = True
 
 @router.post("/signup", response_model=UserOut)
-def create_user(user_in: UserCreate, db: Session = Depends(deps.get_db)) -> Any:
+def create_user(
+    request: Request,
+    user_in: UserCreate,
+    db: Session = Depends(deps.get_db),
+    r: redis.Redis = Depends(deps.get_redis)
+) -> Any:
+    ip = request.client.host if request.client else "unknown"
+    _check_rate_limit(r, f"rate_limit:signup:{ip}")
+
     user = db.query(User).filter(User.email == user_in.email).first()
     if user:
         raise HTTPException(status_code=400, detail="User already exists")
-    
+
     db_user = User(
         email=user_in.email,
         hashed_password=security.get_password_hash(user_in.password),
@@ -53,14 +81,20 @@ def create_user(user_in: UserCreate, db: Session = Depends(deps.get_db)) -> Any:
 
 @router.post("/login/access-token")
 def login_access_token(
-    db: Session = Depends(deps.get_db), form_data: OAuth2PasswordRequestForm = Depends()
+    request: Request,
+    db: Session = Depends(deps.get_db),
+    form_data: OAuth2PasswordRequestForm = Depends(),
+    r: redis.Redis = Depends(deps.get_redis)
 ) -> Any:
+    ip = request.client.host if request.client else "unknown"
+    _check_rate_limit(r, f"rate_limit:login:{ip}")
+
     user = db.query(User).filter(User.email == form_data.username).first()
     if not user or not security.verify_password(form_data.password, user.hashed_password):
         raise HTTPException(status_code=400, detail="Incorrect email or password")
     elif not user.is_active or user.is_deleted:
         raise HTTPException(status_code=400, detail="Inactive user")
-    
+
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     return {
         "access_token": security.create_access_token(

@@ -20,6 +20,7 @@ COPY apps/backend /app
 
 EXPOSE 8000
 
-# Railway injects $PORT dynamically — use sh -c to guarantee shell variable expansion
-CMD ["/bin/sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000} --workers 1 --timeout-keep-alive 75"]
+# Run Alembic migrations then start the server.
+# `alembic upgrade head` is idempotent — safe to run on every deploy.
+CMD ["/bin/sh", "-c", "alembic upgrade head && uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000} --workers 1 --timeout-keep-alive 75"]
 
