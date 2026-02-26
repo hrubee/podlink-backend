@@ -35,7 +35,35 @@ async def get_matches(
     int_match_ids = [int(mid) for mid in match_ids if str(mid).isdigit()]
     matched_users = db.query(User).filter(User.id.in_(int_match_ids)).all()
     
-    # 3. Format Response
+    # 3. Format Response — include last message + unread count per conversation
+    from app.models.chat import ChatMessage
+    from sqlalchemy import desc
+
+    def _last_message(other_id: int):
+        room_id = "-".join(sorted([str(current_user.id), str(other_id)]))
+        msg = (
+            db.query(ChatMessage)
+            .filter(ChatMessage.room_id == room_id)
+            .order_by(desc(ChatMessage.created_at))
+            .first()
+        )
+        if not msg:
+            return None, None
+        return msg.content, msg.created_at.isoformat() if msg.created_at else None
+
+    def _unread_count(other_id: int):
+        room_id = "-".join(sorted([str(current_user.id), str(other_id)]))
+        return (
+            db.query(ChatMessage)
+            .filter(
+                ChatMessage.room_id == room_id,
+                ChatMessage.sender_id == str(other_id),
+            )
+            .count()
+            # Note: a proper "read" receipt system would track last_read_at per user.
+            # For now we show the total from the other side as a rough unread indicator.
+        )
+
     return {
         "matches": [
             {
@@ -43,7 +71,9 @@ async def get_matches(
                 "name": u.full_name,
                 "avatar": u.avatar_url,
                 "role": u.role,
-                "last_active": "Just now" # Placeholder
+                "last_message": _last_message(u.id)[0] or "Tap to chat",
+                "last_message_at": _last_message(u.id)[1],
+                "unread_count": _unread_count(u.id),
             }
             for u in matched_users
         ]
@@ -246,12 +276,18 @@ async def like_user(
     if not is_match:
         await payment_service.increment_quota(current_user_id)
 
-    # Auto-trigger NCF retraining every 50 new likes
-    total_likes = db.query(Interaction).filter(
+    # Auto-trigger NCF retraining every 50 NEW likes (not total)
+    # Store the baseline in Redis to track delta
+    from app.api.deps import NoOpRedis
+    current_count = db.query(Interaction).filter(
         Interaction.interaction_type == InteractionType.LIKE
     ).count()
-    if total_likes > 0 and total_likes % 50 == 0:
-        background_tasks.add_task(_trigger_ncf_retrain, db)
+    if not isinstance(r, NoOpRedis):
+        baseline_key = "ncf:last_retrain_count"
+        last_count = int(r.get(baseline_key) or 0)
+        if (current_count - last_count) >= 50:
+            r.set(baseline_key, current_count)
+            background_tasks.add_task(_trigger_ncf_retrain, db)
 
     return {
         "status": "success",
@@ -346,7 +382,20 @@ async def unmatch_user(
     # 1. Remove the match (sets is_active=False for BOTH users)
     await service.unmatch(current_user_id, target_id_str)
 
-    # 2. Also wipe all chat messages in the shared room for both sides
+    # 2. Record a DISLIKE interaction so the ML model learns this negative signal
+    existing_dislike = db.query(Interaction).filter(
+        Interaction.actor_id == current_user_id,
+        Interaction.target_id == target_id_str,
+        Interaction.interaction_type == InteractionType.DISLIKE
+    ).first()
+    if not existing_dislike:
+        db.add(Interaction(
+            actor_id=current_user_id,
+            target_id=target_id_str,
+            interaction_type=InteractionType.DISLIKE
+        ))
+
+    # 3. Delete all chat messages in the shared room
     from app.models.chat import ChatMessage
     room_id = "-".join(sorted([current_user_id, target_id_str]))
     db.query(ChatMessage).filter(
@@ -355,3 +404,4 @@ async def unmatch_user(
     db.commit()
 
     return {"status": "success", "message": "Unmatched and chat cleared for both users."}
+

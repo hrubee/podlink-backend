@@ -79,6 +79,19 @@ class TrainRequest(BaseModel):
     batch_size: int = 256
     lr: float = 0.001
 
+class IndexAddRequest(BaseModel):
+    """Single-profile index update — called after user onboarding."""
+    id: int
+    bio: str = ""
+    topics: List[str] = []
+    target_audience: str = ""
+    language: str = "English"
+    engagement_style: List[str] = []
+    interview_format: str = "both"
+    episode_length_pref: str = "45-60"
+    content_rating: str = "clean"
+    fee_expectation: str = "free"
+
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
@@ -208,6 +221,44 @@ async def trigger_training(request: TrainRequest, background_tasks: BackgroundTa
         "status": "started",
         "message": f"Training started with {len(likes)} interactions.",
         "epochs": request.epochs,
+    }
+
+
+@app.post("/index/add")
+async def add_to_index(request: IndexAddRequest):
+    """
+    Add or update a single user profile in the FAISS vector index.
+    Called automatically after a user completes onboarding so they
+    appear in semantic search and recommendations immediately.
+    """
+    if vector_store is None:
+        raise HTTPException(status_code=503, detail="Vector store not initialized.")
+
+    # Build a rich text representation for embedding
+    topics_str = ", ".join(request.topics) if request.topics else ""
+    style_str = ", ".join(request.engagement_style) if request.engagement_style else ""
+    text = (
+        f"{request.bio} "
+        f"Topics: {topics_str}. "
+        f"Audience: {request.target_audience}. "
+        f"Language: {request.language}. "
+        f"Style: {style_str}. "
+        f"Format: {request.interview_format}. "
+        f"Length: {request.episode_length_pref}. "
+        f"Rating: {request.content_rating}. "
+        f"Fee: {request.fee_expectation}."
+    ).strip()
+
+    metadata = request.model_dump()
+    metadata.pop("bio", None)  # bio is already in text
+
+    vector_store.add_or_update(str(request.id), text, metadata)
+    vector_store.persist_index()
+
+    return {
+        "status": "indexed",
+        "user_id": request.id,
+        "index_size": len(vector_store.metadata),
     }
 
 

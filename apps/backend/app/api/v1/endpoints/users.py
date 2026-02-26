@@ -1,5 +1,5 @@
 from typing import Any, List, Optional, Dict
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from sqlalchemy.orm import Session
 from app.api import deps, auth_deps
 from app.models.user import User, UserRole
@@ -61,12 +61,14 @@ class UserUpdate(BaseModel):
 @router.post("/onboarding", response_model=dict)
 def submit_onboarding(
     data: OnboardingUpdate,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(auth_deps.get_current_user),
     db: Session = Depends(deps.get_db)
 ) -> Any:
     """
     Submits onboarding data for a user.
     All fields are used by the AI matching engine for content-based scoring.
+    Also triggers a background task to add this user to the ML vector index.
     """
     try:
         if data.full_name:
@@ -100,10 +102,48 @@ def submit_onboarding(
         db.commit()
         db.refresh(current_user)
 
+        # Asynchronously add this user to the ML vector index
+        background_tasks.add_task(_index_user_in_ml, current_user)
+
         return {"status": "success", "message": "Onboarding completed"}
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Failed to save onboarding data: {str(e)}")
+
+
+async def _index_user_in_ml(user: User):
+    """Background task: add or update a user's profile in the ML vector index."""
+    import httpx
+    import logging
+    from app.core.config import settings
+    if not settings.ML_SERVICE_URL:
+        return
+    payload = {
+        "id": user.id,
+        "bio": user.bio or "",
+        "topics": user.topics or [],
+        "target_audience": user.target_audience or "",
+        "language": user.language or "English",
+        "engagement_style": user.engagement_style or [],
+        "interview_format": user.interview_format or "both",
+        "episode_length_pref": user.episode_length_pref or "45-60",
+        "content_rating": user.content_rating or "clean",
+        "fee_expectation": user.fee_expectation or "free",
+    }
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(
+                f"{settings.ML_SERVICE_URL}/index/add",
+                json=payload,
+                timeout=10.0
+            )
+            logging.getLogger(__name__).info(
+                f"ML index updated for user {user.id}: {resp.status_code}"
+            )
+    except Exception as e:
+        logging.getLogger(__name__).warning(
+            f"ML index update failed for user {user.id}: {e}"
+        )
 
 
 @router.put("/me", response_model=dict)

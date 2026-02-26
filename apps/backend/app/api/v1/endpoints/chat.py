@@ -88,18 +88,29 @@ async def get_conversations(
 
 @router.get("/history/{other_user_id}")
 async def get_chat_history(
-    other_user_id: str, 
+    other_user_id: str,
+    before: int = None,   # cursor: return messages with id < before
+    limit: int = 30,
     current_user: User = Depends(auth_deps.get_current_user),
     db: Session = Depends(deps.get_db)
 ):
     from app.models.chat import ChatMessage
     current_user_id = str(current_user.id)
     room_id = "-".join(sorted([current_user_id, other_user_id]))
-    
-    messages = db.query(ChatMessage).filter(
-        ChatMessage.room_id == room_id
-    ).order_by(ChatMessage.created_at.asc()).limit(50).all()
-    
+
+    query = db.query(ChatMessage).filter(ChatMessage.room_id == room_id)
+    if before:
+        query = query.filter(ChatMessage.id < before)
+
+    messages = (
+        query
+        .order_by(ChatMessage.created_at.desc())
+        .limit(min(limit, 50))
+        .all()
+    )
+    # Return in chronological order (oldest first)
+    messages = list(reversed(messages))
+
     return [
         {
             "id": m.id,

@@ -58,3 +58,35 @@ class VectorSearchService:
             with open(f"{path}.metadata", "r") as f:
                 self.metadata = json.load(f)
             logger.info("Loaded existing vector index.")
+
+    def add_or_update(self, id: str, text: str, extra_meta: dict = None):
+        """
+        Upsert a single profile into the vector index.
+        If the ID already exists, removes the old entry first.
+        Note: FAISS IndexFlatIP doesn't support in-place deletion, so we
+        rebuild the index without the stale entry when updating.
+        """
+        if id in self.metadata:
+            # Remove the stale entry by rebuilding without it
+            keep_positions = [i for i, m in enumerate(self.metadata) if m != id]
+            if keep_positions:
+                all_vectors = self.index.reconstruct_n(0, self.index.ntotal)
+                kept_vectors = np.array([all_vectors[i] for i in keep_positions]).astype("float32")
+                self.index = faiss.IndexFlatIP(self.dimension)
+                self.index.add(kept_vectors)
+                self.metadata = [self.metadata[i] for i in keep_positions]
+            else:
+                self.index = faiss.IndexFlatIP(self.dimension)
+                self.metadata = []
+
+        # Add the new/updated embedding
+        embedding = self.model.encode([text])
+        faiss.normalize_L2(embedding)
+        self.index.add(np.array(embedding).astype("float32"))
+        self.metadata.append(id)
+        logger.info(f"Upserted user {id} into vector index (total: {len(self.metadata)})")
+
+    def persist_index(self, path: str = "registry/vector_index.faiss"):
+        """Convenience alias for save_index — called after each live upsert."""
+        self.save_index(path)
+
