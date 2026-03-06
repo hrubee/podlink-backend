@@ -38,5 +38,5 @@ def setup_exception_handlers(app):
         logger.error(f"Global Exception on {request.url.path}: {str(exc)}", exc_info=True)
         return JSONResponse(
             status_code=500,
-            content={"detail": "An internal server error occurred. Our team has been notified."},
+            content={"detail": f"Internal Server Error: {str(exc)}"},
         )

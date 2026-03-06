@@ -11,8 +11,18 @@ class VectorSearchService:
     def __init__(self, model_name: str = "all-MiniLM-L6-v2"):
         self.model = SentenceTransformer(model_name)
         self.dimension = 384  # Dimension for all-MiniLM-L6-v2
-        self.index = faiss.IndexFlatIP(self.dimension) # Inner Product for Cosine Similarity on normalized vectors
-        self.metadata = [] # Stores mapping of index to external_id
+        # Wrap with IndexIDMap to support ID-based operations like remove_ids in O(1) lookup
+        self.index = faiss.IndexIDMap(faiss.IndexFlatIP(self.dimension))
+        self.metadata = {}  # { int_id: ext_str_id }
+        self._next_id = 1
+
+    def _get_or_create_internal_id(self, ext_id: str) -> int:
+        for int_id, eid in self.metadata.items():
+            if eid == ext_id:
+                return int_id
+        new_id = self._next_id
+        self._next_id += 1
+        return new_id
 
     def add_texts(self, ids: List[str], texts: List[str]):
         """Generates embeddings and adds them to the FAISS index."""
@@ -20,11 +30,17 @@ class VectorSearchService:
             return
             
         embeddings = self.model.encode(texts)
-        # Normalize for cosine similarity
         faiss.normalize_L2(embeddings)
         
-        self.index.add(np.array(embeddings).astype('float32'))
-        self.metadata.extend(ids)
+        int_ids = []
+        new_metadata = dict(self.metadata)
+        for ext_id in ids:
+            int_id = self._get_or_create_internal_id(ext_id)
+            int_ids.append(int_id)
+            new_metadata[int_id] = ext_id
+            
+        self.index.add_with_ids(np.array(embeddings).astype('float32'), np.array(int_ids).astype('int64'))
+        self.metadata = new_metadata
         logger.info(f"Added {len(texts)} items to vector index.")
 
     def search(self, query: str, top_k: int = 10) -> List[Dict[str, Any]]:
@@ -36,7 +52,7 @@ class VectorSearchService:
         
         results = []
         for dist, idx in zip(distances[0], indices[0]):
-            if idx != -1: # FAISS returns -1 if not enough matches
+            if idx != -1 and idx in self.metadata:
                 results.append({
                     "id": self.metadata[idx],
                     "score": float(dist)
@@ -45,45 +61,66 @@ class VectorSearchService:
 
     def save_index(self, path: str = "registry/vector_index.faiss"):
         os.makedirs(os.path.dirname(path), exist_ok=True)
-        faiss.write_index(self.index, path)
-        # In a real system, we'd also save the metadata list to a JSON/Pickle file
+        # Atomic rename implementation for saving
+        temp_path = f"{path}.temp"
+        faiss.write_index(self.index, temp_path)
+        os.rename(temp_path, path)
+        
         import json
-        with open(f"{path}.metadata", "w") as f:
-            json.dump(self.metadata, f)
+        with open(f"{path}.metadata.temp", "w") as f:
+            json.dump({"metadata": self.metadata, "next_id": self._next_id}, f)
+        os.rename(f"{path}.metadata.temp", f"{path}.metadata")
 
     def load_index(self, path: str = "registry/vector_index.faiss"):
         if os.path.exists(path):
-            self.index = faiss.read_index(path)
-            import json
-            with open(f"{path}.metadata", "r") as f:
-                self.metadata = json.load(f)
-            logger.info("Loaded existing vector index.")
+            try:
+                self.index = faiss.read_index(path)
+                import json
+                with open(f"{path}.metadata", "r") as f:
+                    data = json.load(f)
+                    
+                # Support backwards compatibility with old list-style metadata
+                if isinstance(data, list):
+                    logger.warning("Migrating old list-style metadata to dict-style.")
+                    self.metadata = {}
+                    for i, ext_id in enumerate(data):
+                        self.metadata[i] = ext_id
+                    self._next_id = len(data)
+                else:
+                    self.metadata = {int(k): v for k, v in data.get("metadata", {}).items()}
+                    self._next_id = data.get("next_id", max(self.metadata.keys(), default=0) + 1)
+                logger.info("Loaded existing vector index.")
+            except Exception as e:
+                logger.warning(f"Failed loading index ({e}), starting fresh.")
+                self.index = faiss.IndexIDMap(faiss.IndexFlatIP(self.dimension))
 
     def add_or_update(self, id: str, text: str, extra_meta: dict = None):
         """
-        Upsert a single profile into the vector index.
-        If the ID already exists, removes the old entry first.
-        Note: FAISS IndexFlatIP doesn't support in-place deletion, so we
-        rebuild the index without the stale entry when updating.
+        Upsert a single profile into the vector index cleanly using IDMap.
         """
-        if id in self.metadata:
-            # Remove the stale entry by rebuilding without it
-            keep_positions = [i for i, m in enumerate(self.metadata) if m != id]
-            if keep_positions:
-                all_vectors = self.index.reconstruct_n(0, self.index.ntotal)
-                kept_vectors = np.array([all_vectors[i] for i in keep_positions]).astype("float32")
-                self.index = faiss.IndexFlatIP(self.dimension)
-                self.index.add(kept_vectors)
-                self.metadata = [self.metadata[i] for i in keep_positions]
-            else:
-                self.index = faiss.IndexFlatIP(self.dimension)
-                self.metadata = []
-
+        int_id = None
+        for k, v in self.metadata.items():
+            if v == id:
+                int_id = k
+                break
+                
+        if int_id is not None:
+            # Remove the stale vectors by internal ID map cleanly
+            self.index.remove_ids(np.array([int_id]).astype('int64'))
+        else:
+            int_id = self._next_id
+            self._next_id += 1
+            
         # Add the new/updated embedding
         embedding = self.model.encode([text])
         faiss.normalize_L2(embedding)
-        self.index.add(np.array(embedding).astype("float32"))
-        self.metadata.append(id)
+        
+        new_metadata = dict(self.metadata)
+        new_metadata[int_id] = id
+        
+        self.index.add_with_ids(np.array(embedding).astype("float32"), np.array([int_id]).astype("int64"))
+        self.metadata = new_metadata
+        
         logger.info(f"Upserted user {id} into vector index (total: {len(self.metadata)})")
 
     def persist_index(self, path: str = "registry/vector_index.faiss"):

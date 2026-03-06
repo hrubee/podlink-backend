@@ -167,7 +167,11 @@ class Trainer:
         version_path = os.path.join(REGISTRY_DIR, version)
 
         torch.save(self.model.state_dict(), version_path)
-        torch.save(self.model.state_dict(), LATEST_MODEL_PATH)
+        
+        # MLOps Fix: Atomic rename to prevent race conditions reading partial model weights
+        temp_latest = os.path.join(REGISTRY_DIR, "latest_temp.pt")
+        torch.save(self.model.state_dict(), temp_latest)
+        os.rename(temp_latest, LATEST_MODEL_PATH)
 
         # Save metadata for inference
         meta = {
@@ -204,22 +208,42 @@ def run_training(
     if len(likes) < 5:
         return {"status": "skipped", "reason": "Not enough positive interactions (<5 likes)."}
 
-    user_ids = [i["actor_id"] for i in likes]
+    # Fix: Train/Validation Split for Model Evaluation
+    np.random.seed(42)
+    np.random.shuffle(likes)
+    
+    # 80/20 split, minimum 1 val sample
+    split_idx = max(1, int(len(likes) * 0.8))
+    if split_idx >= len(likes):
+        split_idx = len(likes) - 1
+        
+    train_likes = likes[:split_idx]
+    val_likes = likes[split_idx:]
+
+    user_ids = [i["actor_id"] for i in likes] # ALL IDs for mapping
     item_ids = [i["target_id"] for i in likes]
-    labels = [1.0] * len(likes)
 
     # Build ID mapping
     id_mapper = IDMapper()
     id_mapper.fit(user_ids, item_ids)
-
-    # Map to embedding indices
-    mapped_users = [id_mapper.get_user(u) for u in user_ids]
-    mapped_items = [id_mapper.get_item(i) for i in item_ids]
     all_mapped_items = list(id_mapper.item_map.values())
 
+    # Map train
+    train_mapped_users = [id_mapper.get_user(i["actor_id"]) for i in train_likes]
+    train_mapped_items = [id_mapper.get_item(i["target_id"]) for i in train_likes]
+    train_labels = [1.0] * len(train_likes)
+    
+    # Map val
+    val_mapped_users = [id_mapper.get_user(i["actor_id"]) for i in val_likes]
+    val_mapped_items = [id_mapper.get_item(i["target_id"]) for i in val_likes]
+    val_labels = [1.0] * len(val_likes)
+
     # Dataset + DataLoader
-    dataset = InteractionDataset(mapped_users, mapped_items, labels, all_mapped_items, neg_ratio=4)
-    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=0)
+    train_dataset = InteractionDataset(train_mapped_users, train_mapped_items, train_labels, all_mapped_items, neg_ratio=4)
+    train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=0)
+    
+    val_dataset = InteractionDataset(val_mapped_users, val_mapped_items, val_labels, all_mapped_items, neg_ratio=4)
+    val_dataloader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=0)
 
     # Build model
     model = NCFModel(
@@ -230,23 +254,47 @@ def run_training(
     )
     trainer = Trainer(model, lr=lr)
 
-    # Train
+    # MLOps Fix: Train with validation and early stopping
     losses = []
+    val_metrics = []
+    best_hr = -1.0
+    patience = 0
+    
     for epoch in range(epochs):
-        loss = trainer.train_epoch(dataloader)
+        loss = trainer.train_epoch(train_dataloader)
+        hr = trainer.evaluate(val_dataloader)
+        
         losses.append(round(loss, 4))
-        logger.info(f"Epoch {epoch+1}/{epochs} — Loss: {loss:.4f}")
+        val_metrics.append(round(hr, 4))
+        logger.info(f"Epoch {epoch+1}/{epochs} — Loss: {loss:.4f} — Val HR@10: {hr:.4f}")
+        
+        if hr > best_hr:
+            best_hr = hr
+            patience = 0
+            torch.save(model.state_dict(), os.path.join(REGISTRY_DIR, "best_temp.pt"))
+        else:
+            patience += 1
+            if patience >= 3:
+                logger.info("Early stopping triggered after 3 epochs without improvement.")
+                break
+
+    # Load the best model weights back before deploying
+    best_temp_path = os.path.join(REGISTRY_DIR, "best_temp.pt")
+    if os.path.exists(best_temp_path):
+        model.load_state_dict(torch.load(best_temp_path))
+        os.remove(best_temp_path)
 
     # Save
     path = trainer.save_to_registry(id_mapper)
 
     return {
         "status": "success",
-        "epochs": epochs,
-        "interactions_used": len(likes),
+        "epochs": len(losses),
+        "interactions_used": len(train_likes),
         "num_users": id_mapper.num_users,
         "num_items": id_mapper.num_items,
         "final_loss": losses[-1],
         "loss_history": losses,
+        "best_val_hr": best_hr,
         "model_path": path,
     }

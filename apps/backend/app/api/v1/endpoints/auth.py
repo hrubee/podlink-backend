@@ -165,6 +165,10 @@ def login_with_google(
         }
     except ValueError as e:
         raise HTTPException(status_code=400, detail=f"Invalid Google token: {str(e)}")
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=400, detail=f"Google login failed: {str(e)}")
 
 @router.delete("/me", status_code=status.HTTP_204_NO_CONTENT)
 def delete_my_data(
