@@ -2,12 +2,14 @@ import os
 os.environ.setdefault("SECRET_KEY", "ci-test-secret-key-not-real-32chars!")
 os.environ.setdefault("DATABASE_URL", "sqlite:///./test_ci.db")
 
+from app.models.database import engine, Base
 from app.models.user import User, UserRole
 from app.models.marketing import WaitlistEntry
 from app.models.database import SessionLocal
 import traceback
 
 print("Testing user creation...")
+Base.metadata.create_all(bind=engine)
 db = SessionLocal()
 try:
     email = "testgoogle500_2@example.com"
@@ -28,7 +30,7 @@ try:
         new_waitlist = WaitlistEntry(
             email=email,
             fullName=name,
-            role_interest=str(user_role.value) if hasattr(user_role, 'value') else str(user_role)
+            role_interest=user_role
         )
         db.add(new_waitlist)
         

@@ -4,6 +4,10 @@ from sqlalchemy.sql import func
 import enum
 from .database import Base
 
+# Imports required for resolving string-based relationships
+from .agency import Agency, agency_members
+from .podcast import Podcast, PodcastHost
+
 class UserRole(str, enum.Enum):
     ADMIN = "admin"
     AGENCY = "agency"
