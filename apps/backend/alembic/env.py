@@ -15,7 +15,6 @@ from app.models.user import User
 from app.models.chat import ChatMessage, ChatRoom
 from app.models.safety import UserReport, AuditLog
 from app.models.matches import Match, Interaction
-from app.models.agency import Agency
 from app.models.marketing import WaitlistEntry
 from app.models.podcast import Podcast
 

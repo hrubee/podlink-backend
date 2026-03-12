@@ -1,10 +1,10 @@
-# PodMatch.AI - Complete Project Overview
+# PodLink.AI - Complete Project Overview
 
 ## 📋 Executive Summary
 
-**PodMatch.AI** is a production-ready, AI-powered SaaS platform designed to connect podcast hosts with the perfect guests using semantic search, neural collaborative filtering, and real-time communications. The platform is built as a microservices architecture with complete authentication, payment processing, admin controls, and safety features.
+**PodLink.AI** is a production-ready, AI-powered SaaS platform designed to connect podcast hosts with the perfect guests using semantic search, neural collaborative filtering, and real-time communications. The platform is built as a microservices architecture with complete authentication, payment processing, admin controls, and safety features.
 
-**Status:** ✅ **Production Ready** - All 7 development phases completed
+**Status:** ✅ **Production Ready** - Core backend and ML services completed
 
 ---
 
@@ -12,22 +12,23 @@
 
 ### Microservices Architecture
 
-The system consists of **4 main services** orchestrated via Docker Compose and deployable to Kubernetes:
+The system consists of **2 main services** orchestrated via Docker Compose:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                        Frontend (Next.js)                    │
-│                     Port 3000 - React/TypeScript             │
+│                        External Clients                      │
+│                     (Mobile / Web Apps)                      │
 └────────────────────────┬────────────────────────────────────┘
                          │
         ┌────────────────┼────────────────┐
         │                │                │
 ┌───────▼──────┐  ┌──────▼──────┐  ┌─────▼────────┐
-│   Backend    │  │ ML Service  │  │  Ingestion   │
-│   (FastAPI)  │  │  (PyTorch)  │  │   Service    │
-│   Port 8000  │  │  Port 8001  │  │  Port 8002   │
-└──────┬───────┘  └─────────────┘  └──────┬───────┘
-       │                                   │
+│   Backend    │  │ ML Service  │  │   Shared     │
+│   (FastAPI)  │  │  (PyTorch)  │  │    Libs      │
+│   Port 8000  │  │  Port 8001  │  │    Files     │
+└──────┬───────┘  └─────────────┘  └──────────────┘
+       │                                   
+       │                                   
        └───────────┬───────────────────────┘
                    │
         ┌──────────▼──────────┐
@@ -42,15 +43,15 @@ The system consists of **4 main services** orchestrated via Docker Compose and d
 
 ### 1. **Authentication & Authorization** ✅
 - **JWT-based authentication** with bcrypt password hashing
-- **Role-based access control** (Admin, Agency, Host, Guest)
+- **Role-based access control** (Admin, Host, Guest)
 - **GDPR-compliant** soft/hard delete functionality
-- Token expiry: 8 days (configurable)
+- Token expiry: 8 hours (configurable)
 
 ### 2. **AI-Powered Matching** ✅
 - **Neural Collaborative Filtering (NCF)** for personalized recommendations
 - **Semantic Search** using FAISS + Sentence Transformers
-- **Tinder-style swipe interface** for discovering matches
-- **Mutual match detection** with Redis-backed real-time notifications
+- **Tinder-style swipe logic** for discovering matches
+- **Mutual match detection** with Redis-backed real-time state
 
 ### 3. **Real-Time Chat** ✅
 - **WebSocket-based messaging** with connection manager
@@ -60,36 +61,27 @@ The system consists of **4 main services** orchestrated via Docker Compose and d
 
 ### 4. **Payment Integration** ✅
 - **Razorpay integration** for subscriptions
-- **7-day free trial** with automatic conversion
+- **Tiered Plans** (Free & Pro) with monthly/annual options
 - **Quota management** using Redis sliding window
 - **Webhook verification** for secure payment events
-- Free tier: 10 outreach attempts per 30 days
 
 ### 5. **Discovery & Search** ✅
-- **Podchaser API integration** for real podcast data
-- **Trending podcasts** discovery feed
-- **Profile search** for hosts and guests
-- **Detailed creator profiles** with social links and podcast appearances
+- **Internal Profile Discovery** for hosts and guests
+- **Profile search** using hybrid ranking
+- **Detailed creator profiles** with social links and podcast data
 
 ### 6. **Admin & Safety** ✅
 - **Admin dashboard** with real-time metrics
 - **User reporting system** integrated into chat
 - **Ban/unban functionality** with audit logging
-- **Moderation queue** for reviewing reports
 - **Observability middleware** for performance tracking
-
-### 7. **Agency Management** ✅
-- **White-label agency accounts** with custom slugs
-- **Client onboarding** and management
-- **Multi-tenant support** for managing multiple clients
-- **Agency member roles** (owner, manager, member)
 
 ---
 
 ## 📁 Project Structure
 
 ```
-podcast/
+podlink/
 ├── apps/
 │   ├── backend/              # FastAPI Core API
 │   │   ├── app/
@@ -100,96 +92,36 @@ podcast/
 │   │   │   │           ├── matches.py      # Like/Match/Search
 │   │   │   │           ├── chat.py         # WebSocket chat
 │   │   │   │           ├── payments.py     # Razorpay integration
-│   │   │   │           ├── admin.py        # Admin controls
-│   │   │   │           ├── agency.py       # Agency management
-│   │   │   │           └── discovery.py    # Profile discovery
+│   │   │   │           └── admin.py        # Admin controls
 │   │   │   ├── core/         # Security, config, middleware
 │   │   │   ├── models/       # SQLAlchemy models
 │   │   │   │   ├── user.py
 │   │   │   │   ├── matches.py
-│   │   │   │   ├── chat.py
-│   │   │   │   ├── safety.py
-│   │   │   │   └── agency.py
+│   │   │   │   └── chat.py
 │   │   │   └── services/     # Business logic
 │   │   │       ├── matching.py
 │   │   │       ├── chat.py
-│   │   │       ├── payments.py
-│   │   │       └── agency.py
+│   │   │       └── payments.py
 │   │   └── main.py
-│   │
-│   ├── frontend/             # Next.js 14 App
-│   │   ├── src/
-│   │   │   ├── app/          # Pages (App Router)
-│   │   │   │   ├── page.tsx           # Landing page
-│   │   │   │   ├── login/
-│   │   │   │   ├── signup/
-│   │   │   │   ├── dashboard/
-│   │   │   │   │   ├── page.tsx       # Discovery feed
-│   │   │   │   │   ├── discover/
-│   │   │   │   │   ├── matches/
-│   │   │   │   │   ├── messages/
-│   │   │   │   │   └── billing/
-│   │   │   │   ├── admin/
-│   │   │   │   └── agency/
-│   │   │   ├── components/   # React components
-│   │   │   │   ├── discovery/
-│   │   │   │   │   ├── DiscoveryFeed.tsx
-│   │   │   │   │   └── SwipeCard.tsx
-│   │   │   │   ├── chat/
-│   │   │   │   │   └── ChatWindow.tsx
-│   │   │   │   ├── admin/
-│   │   │   │   ├── agency/
-│   │   │   │   ├── billing/
-│   │   │   │   └── layout/
-│   │   │   ├── lib/          # API client
-│   │   │   ├── store/        # Zustand state management
-│   │   │   └── middleware.ts # Route protection
-│   │   └── package.json
 │   │
 │   ├── ml-service/           # PyTorch ML Service
 │   │   ├── app/
 │   │   │   ├── services/
 │   │   │   │   ├── ranking.py         # NCF model
 │   │   │   │   └── vector_search.py   # FAISS search
-│   │   │   └── models/
-│   │   ├── registry/         # Trained models
 │   │   └── main.py
 │   │
-│   └── ingestion-service/    # Data Pipeline
-│       ├── app/
-│       │   ├── clients/
-│       │   │   └── podchaser.py       # Podchaser API client
-│       │   ├── training/
-│       │   │   ├── bulk_ingest.py     # Bulk data ingestion
-│       │   │   └── train_model.py     # Model training
-│       │   ├── tasks/
-│       │   │   └── scheduler.py       # Periodic jobs
-│       │   └── db/
-│       └── main.py
+├── libs/
+│   └── shared/               # Shared utilities
 │
 ├── infra/
-│   ├── docker/               # Dockerfiles
-│   │   ├── backend.Dockerfile
-│   │   ├── frontend.Dockerfile
-│   │   ├── ml-service.Dockerfile
-│   │   └── ingestion.Dockerfile
-│   ├── k8s/                  # Kubernetes manifests
-│   │   ├── backend-deployment.yaml
-│   │   ├── frontend-deployment.yaml
-│   │   ├── ml-service-deployment.yaml
-│   │   ├── ingestion-service-deployment.yaml
-│   │   ├── hpa.yaml          # Auto-scaling
-│   │   ├── ingress.yaml      # Load balancer
-│   │   └── secrets-config.yaml
-│   └── ci-cd/
-│       └── github-actions.yml
+│   └── docker/               # Dockerfiles
+│       ├── backend.Dockerfile
+│       └── ml-service.Dockerfile
 │
 ├── docker-compose.yml        # Local development
 ├── .env                      # Environment variables
-├── README.md
-├── ARCHITECTURE.md
-├── PHASE_COMPLETE.md         # Phase 6 completion
-└── PHASE_7_COMPLETE.md       # Phase 7 completion
+└── README.md
 ```
 
 ---
@@ -204,13 +136,10 @@ podcast/
 - email (unique)
 - hashed_password
 - full_name
-- role (admin|agency|host|guest)
+- role (admin|host|guest)
 - is_active
 - is_deleted (soft delete)
-- deleted_at
-- is_public
-- agency_id (FK)
-- created_at, updated_at
+- matching_signals (topics, bio, etc.)
 ```
 
 #### **matches**
@@ -219,16 +148,7 @@ podcast/
 - user_one_id
 - user_two_id
 - is_active
-- created_at, matched_at
-```
-
-#### **interactions**
-```sql
-- id (PK)
-- actor_id
-- target_id
-- interaction_type (like|dislike)
-- created_at
+- matched_at
 ```
 
 #### **chat_messages**
@@ -237,31 +157,7 @@ podcast/
 - room_id
 - sender_id
 - content
-- is_flagged
-- flagged_reason
 - created_at
-```
-
-#### **user_reports**
-```sql
-- id (PK)
-- reporter_id (FK)
-- target_id (FK)
-- reason
-- details
-- status (pending|resolved|dismissed)
-- created_at, resolved_at
-```
-
-#### **agencies**
-```sql
-- id (PK)
-- name
-- slug (unique)
-- website
-- logo_url
-- owner_id (FK)
-- created_at, updated_at
 ```
 
 ### Redis Data Structures
@@ -270,9 +166,6 @@ podcast/
 likes:{user_id}:{target_id}           → "1" (TTL: 30 days)
 active_matches:{user_id}              → SET of matched user IDs
 limits:matches:{user_id}              → Match count (TTL: 30 days)
-user:{user_id}:quota:outreach:zset    → ZSET for sliding window quota
-user:{user_id}:is_paid                → "1" if premium
-user:{user_id}:notifications          → HASH of notification counts
 ```
 
 ---
@@ -280,13 +173,12 @@ user:{user_id}:notifications          → HASH of notification counts
 ## 🔌 API Endpoints
 
 ### Authentication (`/v1`)
-- `POST /signup` - Create new user account
-- `POST /login/access-token` - Login and get JWT
+- `POST /signup` - Create account
+- `POST /login/access-token` - JWT authentication
 - `DELETE /me` - GDPR-compliant account deletion
 
 ### Matching (`/v1`)
 - `POST /like` - Like a user (with quota check)
-- `GET /search?q={query}` - Semantic search via ML service
 - `GET /matches` - Get active matches
 - `POST /unmatch` - Remove a match
 - `POST /report` - Report a user
@@ -295,12 +187,6 @@ user:{user_id}:notifications          → HASH of notification counts
 - `WS /ws/{user_id}` - WebSocket connection
 - `GET /history/{room_id}` - Message history
 - `POST /send` - Send message (with moderation)
-
-### Discovery (`/v1/discovery`)
-- `GET /search/profiles?q={query}` - Search hosts/guests
-- `GET /discover/trending` - Trending podcasts
-- `GET /profile/{id}` - Detailed profile
-- `GET /search/podcasts?q={query}` - Search podcasts
 
 ### Payments (`/v1/payments`)
 - `POST /subscribe` - Create Razorpay subscription
@@ -312,50 +198,27 @@ user:{user_id}:notifications          → HASH of notification counts
 - `GET /reports` - User reports queue
 - `POST /users/{id}/ban` - Ban user
 
-### Agency (`/v1/agency`)
-- `POST /create` - Create agency
-- `POST /{id}/onboard-client` - Add client
-- `GET /{id}/clients` - List clients
-- `GET /my-agencies` - User's agencies
-
 ### ML Service (`http://ml-service:8001`)
 - `POST /search` - Semantic vector search
 - `POST /rank` - Neural ranking
 - `POST /ingest-vectors` - Add to vector DB
 - `GET /health` - Service status
 
-### Ingestion Service (`http://ingestion-service:8002`)
-- `GET /search/podcasts?q={query}` - Search Podchaser
-- `GET /search/creators?q={query}` - Search creators
-- `GET /discover/trending` - Trending podcasts
-- `GET /creator/{id}` - Creator details
-- `POST /training/bulk-ingest` - Bulk data ingestion
-- `GET /training/status` - Training status
-
 ---
 
 ## 🛠️ Technology Stack
 
 ### Backend
-- **Framework:** FastAPI 0.104.1
-- **Database:** PostgreSQL 15
-- **Cache:** Redis 7
+- **Framework:** FastAPI
+- **Database:** PostgreSQL
+- **Cache:** Redis
 - **ORM:** SQLAlchemy 2.0
-- **Auth:** JWT (python-jose) + bcrypt
-- **Payments:** Razorpay SDK
+- **Auth:** JWT + bcrypt
+- **Payments:** Razorpay
 - **Server:** Uvicorn
 
-### Frontend
-- **Framework:** Next.js 14 (App Router)
-- **Language:** TypeScript
-- **Styling:** Tailwind CSS
-- **Animations:** Framer Motion
-- **State:** Zustand
-- **HTTP:** Axios
-- **Icons:** Lucide React
-
 ### ML/AI
-- **Framework:** PyTorch 2.1
+- **Framework:** PyTorch
 - **Embeddings:** Sentence Transformers
 - **Vector DB:** FAISS
 - **Model:** Neural Collaborative Filtering (NCF)
@@ -363,13 +226,11 @@ user:{user_id}:notifications          → HASH of notification counts
 
 ### Infrastructure
 - **Containerization:** Docker
-- **Orchestration:** Kubernetes (EKS/GKE ready)
-- **Load Balancer:** Nginx Ingress
-- **Auto-scaling:** Horizontal Pod Autoscaler (HPA)
-- **CI/CD:** GitHub Actions
+- **Deployment:** Railway / Nixpacks
+- **Load Balancer:** Nginx Ingress (for K8s, if used)
+- **Auto-scaling:** Horizontal Pod Autoscaler (HPA) (for K8s, if used)
 
 ### External APIs
-- **Podchaser API:** Podcast metadata and creator data
 - **Razorpay:** Payment processing
 
 ---
@@ -378,37 +239,24 @@ user:{user_id}:notifications          → HASH of notification counts
 
 ### Prerequisites
 - Docker & Docker Compose
-- Node.js 20+ (for local frontend dev)
-- Python 3.11+ (for local backend dev)
+- Python 3.11+
 
 ### Quick Start
 
 1. **Clone and Setup Environment**
 ```bash
-cd /Users/hrushi/Downloads/Desktop\ offline/podcast
 cp .env.example .env
 # Edit .env with your credentials
 ```
 
-2. **Start All Services**
+2. **Start Services**
 ```bash
 docker-compose up -d --build
 ```
 
 3. **Access Services**
-- Frontend: http://localhost:3000
 - Backend API: http://localhost:8000/docs
 - ML Service: http://localhost:8001/docs
-- Ingestion Service: http://localhost:8002/docs
-
-4. **Initialize Training Data (Optional)**
-```bash
-# Ingest 100 trending podcasts
-curl -X POST "http://localhost:8002/training/bulk-ingest?num_trending=100"
-
-# Check status
-curl http://localhost:8002/training/status
-```
 
 ### Environment Variables
 
@@ -416,80 +264,28 @@ Key variables in `.env`:
 
 ```bash
 # Database
-DATABASE_URL=postgresql://user:pass@localhost:5432/podcast
+DATABASE_URL=postgresql://user:pass@localhost:5432/podlink
 REDIS_URL=redis://localhost:6379/0
 
 # Security
 SECRET_KEY=yoursecretkeyhere
-ACCESS_TOKEN_EXPIRE_MINUTES=11520
-
-# Podchaser API
-PODCHASER_API_KEY=your_key
-PODCHASER_API_SECRET=your_secret
+ACCESS_TOKEN_EXPIRE_MINUTES=480
 
 # Razorpay
 RAZORPAY_KEY_ID=your_key
 RAZORPAY_KEY_SECRET=your_secret
 RAZORPAY_WEBHOOK_SECRET=your_webhook_secret
-
-# Frontend
-NEXT_PUBLIC_API_URL=http://localhost:8000
-NEXT_PUBLIC_ML_URL=http://localhost:8001
 ```
-
----
-
-## 🎨 Frontend Features
-
-### Landing Page
-- Modern, animated hero section
-- Feature showcase with glassmorphism design
-- Social proof section
-- Responsive navigation
-
-### Authentication
-- Signup with role selection (Host/Guest/Agency)
-- Login with JWT token management
-- Persistent auth state via Zustand
-
-### Dashboard
-- **Discovery Feed:** Tinder-style swipe cards
-- **Semantic Search:** AI-powered profile search
-- **Matches:** View active connections
-- **Messages:** Real-time WebSocket chat
-- **Billing:** Subscription management
-
-### Admin Panel
-- Real-time system metrics
-- User reports moderation queue
-- Ban/unban functionality
-- Audit log tracking
-
-### Agency Portal
-- Create and manage agencies
-- Onboard clients
-- White-label branding support
 
 ---
 
 ## 🧠 AI/ML Pipeline
 
 ### 1. Vector Search (FAISS)
-```python
-# Semantic search flow
-query = "AI expert in machine learning"
-embedding = sentence_transformer.encode(query)
-results = faiss_index.search(embedding, k=10)
-```
+Semantic search flows use deep embeddings to find matches based on expertise and audience overlap rather than exact keywords.
 
 ### 2. Neural Collaborative Filtering
-```python
-# Recommendation flow
-user_embedding = user_encoder(user_id)
-item_embedding = item_encoder(candidate_ids)
-scores = mlp_layers(concat(user_embedding, item_embedding))
-ranked_results = sort_by_score(scores)
-```
+Personalized ranking based on historical match success and user interaction patterns.
 
 ### 3. Training Pipeline
 1. **Data Collection:** Fetch interactions from PostgreSQL
@@ -503,7 +299,7 @@ ranked_results = sort_by_score(scores)
 ## 🔒 Security Features
 
 ### Authentication
-- JWT tokens with 8-day expiry
+- JWT tokens with 8-hour expiry
 - Bcrypt password hashing (cost factor: 12)
 - Role-based access control (RBAC)
 - WebSocket token validation
@@ -516,8 +312,6 @@ ranked_results = sort_by_score(scores)
 
 ### Rate Limiting
 - Redis-based sliding window quota
-- Free tier: 10 outreach/30 days
-- Premium: Unlimited access
 - Match limits: 30 per 30 days
 
 ### Observability
@@ -542,8 +336,8 @@ ranked_results = sort_by_score(scores)
 
 ### Microservices Benefits
 - **Independent scaling:** ML service can scale separately
-- **Fault isolation:** Frontend continues if ML service is down
-- **Technology flexibility:** Python for ML, TypeScript for UI
+- **Fault isolation:** Backend continues if ML service is down
+- **Technology flexibility:** Python for ML
 
 ---
 
@@ -554,24 +348,8 @@ ranked_results = sort_by_score(scores)
 docker-compose up -d
 ```
 
-### Production (Kubernetes)
-```bash
-# Apply all manifests
-kubectl apply -f infra/k8s/
-
-# Check status
-kubectl get pods
-kubectl get services
-kubectl get ingress
-```
-
-### Auto-scaling Configuration
-```yaml
-# HPA for backend
-minReplicas: 2
-maxReplicas: 10
-targetCPUUtilizationPercentage: 70
-```
+### Production (Railway)
+The project is optimized for Railway deployment using the provided `railway.json` and Nixpacks configuration.
 
 ---
 
@@ -606,13 +384,6 @@ open http://localhost:8000/docs
 curl -X POST http://localhost:8000/v1/signup \
   -H "Content-Type: application/json" \
   -d '{"email":"test@example.com","password":"test123","full_name":"Test User","role":"host"}'
-```
-
-### Frontend Testing
-```bash
-cd apps/frontend
-npm run dev
-open http://localhost:3000
 ```
 
 ---
@@ -668,7 +439,6 @@ open http://localhost:3000
 
 4. **Monetization**
    - Tiered pricing plans
-   - Agency white-labeling
    - Marketplace for premium features
 
 ---
@@ -701,7 +471,7 @@ Proprietary - All rights reserved
 
 ## 🙏 Acknowledgments
 
-- **Podchaser API** for podcast metadata
+
 - **Razorpay** for payment processing
 - **HuggingFace** for ML models
 - **FastAPI** for the excellent framework

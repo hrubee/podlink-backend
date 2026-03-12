@@ -12,7 +12,6 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from app.models.database import SessionLocal, engine
 from app.models.user import User, UserRole, Base
-from app.models.agency import Agency, agency_members
 from app.models.matches import Match, Interaction, InteractionType
 from app.models.chat import ChatMessage
 

@@ -8,7 +8,6 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from app.models.database import SessionLocal
 from app.models.user import User
-from app.models.agency import Agency, agency_members
 
 def remove_dummy_users():
     db = SessionLocal()

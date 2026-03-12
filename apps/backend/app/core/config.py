@@ -15,11 +15,22 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 480  # 8 hours (was 8 days — reduced for security)
 
     # Razorpay (optional until payments are live)
-    RAZORPAY_KEY_ID: str = "not_configured"
-    RAZORPAY_KEY_SECRET: str = "not_configured"
+    RAZORPAY_MODE: str = "test"  # "test" or "live"
+    RAZORPAY_TEST_KEY_ID: str = ""
+    RAZORPAY_TEST_KEY_SECRET: str = ""
+    RAZORPAY_LIVE_KEY_ID: str = ""
+    RAZORPAY_LIVE_KEY_SECRET: str = ""
     RAZORPAY_WEBHOOK_SECRET: str = "not_configured"
-    RAZORPAY_PRO_PLAN_ID: str = ""      # Set in Railway: plan_XXXXXXXXXXXXXXXX
-    RAZORPAY_AGENCY_PLAN_ID: str = ""   # Set in Railway: plan_XXXXXXXXXXXXXXXX
+    RAZORPAY_PRO_MONTHLY_PLAN_ID: str = ""      # Set in Railway: plan_XXXXXXXXXXXXXXXX
+    RAZORPAY_PRO_ANNUAL_PLAN_ID: str = ""
+
+    @property
+    def RAZORPAY_KEY_ID(self) -> str:
+        return self.RAZORPAY_LIVE_KEY_ID if self.RAZORPAY_MODE == "live" else self.RAZORPAY_TEST_KEY_ID
+
+    @property
+    def RAZORPAY_KEY_SECRET(self) -> str:
+        return self.RAZORPAY_LIVE_KEY_SECRET if self.RAZORPAY_MODE == "live" else self.RAZORPAY_TEST_KEY_SECRET
 
 
     # Google OAuth

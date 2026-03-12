@@ -105,7 +105,11 @@ def submit_onboarding(
         # Asynchronously add this user to the ML vector index
         background_tasks.add_task(_index_user_in_ml, current_user)
 
-        return {"status": "success", "message": "Onboarding completed"}
+        return {
+            "status": "success",
+            "message": "Onboarding completed",
+            "role": current_user.role.value if current_user.role else None,
+        }
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Failed to save onboarding data: {str(e)}")

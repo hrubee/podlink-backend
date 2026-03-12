@@ -5,12 +5,10 @@ import enum
 from .database import Base
 
 # Imports required for resolving string-based relationships
-from .agency import Agency, agency_members
 from .podcast import Podcast, PodcastHost
 
 class UserRole(str, enum.Enum):
     ADMIN = "admin"
-    AGENCY = "agency"
     HOST = "host"
     GUEST = "guest"
 
@@ -54,16 +52,14 @@ class User(Base):
     is_public = Column(Boolean, default=True)
 
     # ── Subscription / Billing ────────────────────────────────────────────────
-    subscription_status = Column(String, default="free")          # free | pro | agency
+    subscription_status = Column(String, default="free")          # free | pro
     subscription_ends_at = Column(DateTime(timezone=True), nullable=True)
 
     # ── Tracking ──────────────────────────────────────────────────────────────
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
-    # ── Agency Links ──────────────────────────────────────────────────────────
-    agency_id = Column(Integer, ForeignKey("agencies.id"), nullable=True)
-    agencies = relationship("Agency", secondary="agency_members", back_populates="members")
+
     
     # ── Podcast Links ─────────────────────────────────────────────────────────
     podcasts = relationship("Podcast", secondary="podcast_hosts", back_populates="hosts")

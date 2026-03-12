@@ -12,7 +12,8 @@ router = APIRouter()
 
 
 class SubscriptionRequest(BaseModel):
-    plan: str = "pro"   # "pro" | "agency"
+    plan: str = "pro"   # "pro"
+    billing_cycle: str = "monthly"  # "monthly" | "annual"
 
 
 # ── Usage / Billing Dashboard ─────────────────────────────────────────────────
@@ -42,7 +43,7 @@ async def start_subscription(
         raise HTTPException(status_code=503, detail="Payment system not configured yet.")
     payment_service = PaymentService(db, r)
     try:
-        sub = await payment_service.create_subscription(str(current_user.id), request.plan)
+        sub = await payment_service.create_subscription(str(current_user.id), request.plan, request.billing_cycle)
         return sub
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))

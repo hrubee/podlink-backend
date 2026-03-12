@@ -11,17 +11,14 @@ _RAZORPAY_CONFIGURED = (
     and settings.RAZORPAY_KEY_SECRET not in ("not_configured", "", "your_razorpay_secret")
 )
 
-# Plan definitions — map plan name to Razorpay plan ID
+# Plan definitions — map plan name and billing cycle to Razorpay plan ID
 PLANS = {
     "pro": {
         "name": "Pro Personality",
-        "price_inr": 2400,   # ₹2400/mo (~$29)
-        "razorpay_plan_id": settings.RAZORPAY_PRO_PLAN_ID if hasattr(settings, "RAZORPAY_PRO_PLAN_ID") else "",
-    },
-    "agency": {
-        "name": "Talent Agency",
-        "price_inr": 12400,  # ₹12400/mo (~$149)
-        "razorpay_plan_id": settings.RAZORPAY_AGENCY_PLAN_ID if hasattr(settings, "RAZORPAY_AGENCY_PLAN_ID") else "",
+        "price_inr_monthly": 1499,
+        "price_inr_annual": 14390,
+        "razorpay_plan_id_monthly": settings.RAZORPAY_PRO_MONTHLY_PLAN_ID if hasattr(settings, "RAZORPAY_PRO_MONTHLY_PLAN_ID") else "",
+        "razorpay_plan_id_annual": settings.RAZORPAY_PRO_ANNUAL_PLAN_ID if hasattr(settings, "RAZORPAY_PRO_ANNUAL_PLAN_ID") else "",
     },
 }
 
@@ -47,21 +44,24 @@ class PaymentService:
             )
         return self._razorpay_client
 
-    async def create_subscription(self, user_id: str, plan: str = "pro"):
+    async def create_subscription(self, user_id: str, plan: str = "pro", billing_cycle: str = "monthly"):
         """Creates a Razorpay subscription with a 7-day trial period."""
         if plan not in PLANS:
             raise ValueError(f"Unknown plan: {plan}. Choose from {list(PLANS.keys())}")
-        plan_id = PLANS[plan]["razorpay_plan_id"]
+        if billing_cycle not in ["monthly", "annual"]:
+            raise ValueError(f"Unknown billing cycle: {billing_cycle}. Choose 'monthly' or 'annual'.")
+
+        plan_id = PLANS[plan][f"razorpay_plan_id_{billing_cycle}"]
         if not plan_id:
-            raise ValueError(f"Razorpay plan ID for '{plan}' is not configured.")
+            raise ValueError(f"Razorpay plan ID for '{plan}' ({billing_cycle}) is not configured.")
 
         start_at = int((datetime.now() + timedelta(days=7)).timestamp())
         subscription_data = {
             "plan_id": plan_id,
             "customer_notify": 1,
-            "total_count": 12,  # Monthly for a year
+            "total_count": 12 if billing_cycle == "monthly" else 1,
             "start_at": start_at,
-            "notes": {"user_id": user_id, "plan": plan}
+            "notes": {"user_id": user_id, "plan": plan, "billing_cycle": billing_cycle}
         }
         subscription = self.client.subscription.create(data=subscription_data)
         return subscription
@@ -74,7 +74,7 @@ class PaymentService:
             return {"plan": "free", "outreach_used": 0, "outreach_limit": FREE_MONTHLY_LIMIT}
 
         plan = user.subscription_status or "free"
-        is_paid = plan in ("pro", "agency")
+        is_paid = plan == "pro"
 
         # Count real outreach usage from sliding-window quota in Redis
         outreach_used = 0
@@ -107,7 +107,7 @@ class PaymentService:
 
         # 1. Check DB paid status (durable source of truth)
         user = self.db.query(User).filter(User.id == int(user_id)).first()
-        if user and user.subscription_status in ("pro", "agency"):
+        if user and user.subscription_status == "pro":
             # Extra guard: check subscription hasn't expired
             if not user.subscription_ends_at or user.subscription_ends_at > datetime.utcnow():
                 return True
