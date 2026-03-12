@@ -4,7 +4,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 import logging
 import os
 
-from app.api.v1.endpoints import matches, payments, chat, auth, admin, agency, discovery, users, marketing
+from app.api.v1.endpoints import matches, payments, chat, auth, admin, discovery, users, marketing
 from app.models.database import engine, Base
 from app.core.config import settings
 
@@ -13,7 +13,6 @@ from app.models.user import User
 from app.models.chat import ChatMessage, ChatRoom
 from app.models.safety import UserReport, AuditLog
 from app.models.matches import Match
-from app.models.agency import Agency
 from app.models.marketing import WaitlistEntry
 from app.models.podcast import Podcast
 
@@ -110,7 +109,6 @@ app.include_router(matches.router,   prefix="/v1/matches",   tags=["Matching"])
 app.include_router(payments.router,  prefix="/v1/payments",  tags=["Payments"])
 app.include_router(chat.router,      prefix="/v1/chat",      tags=["Chat"])
 app.include_router(admin.router,     prefix="/v1/admin",     tags=["Admin"])
-app.include_router(agency.router,    prefix="/v1/agency",    tags=["Agency"])
 app.include_router(discovery.router, prefix="/v1/discovery", tags=["Discovery"])
 app.include_router(marketing.router, prefix="/v1/marketing", tags=["Marketing"])
 
