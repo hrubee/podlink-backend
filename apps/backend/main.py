@@ -55,7 +55,7 @@ else:
 from app.core.middleware import ObservabilityMiddleware, setup_exception_handlers
 
 app = FastAPI(
-    title="PodLink.AI API",
+    title="PodClip.AI API",
     description="AI-powered podcast host-guest matching platform",
     version="1.0.0",
 )
@@ -92,8 +92,8 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:3000",
         "http://localhost:3001",
-        "https://podlink-frontend-production.up.railway.app",
-        "https://podlink.radianmedia.org",
+        "https://podclip-frontend-production.up.railway.app",
+        "https://podclip.radianmedia.org",
         *_extra_origins,
     ],
     allow_origin_regex=r"https://.*\.railway\.app",
@@ -122,7 +122,7 @@ app.include_router(podcast.router,   prefix="/v1/podcasts",  tags=["Podcasts"])
 def read_root():
     return {
         "status": "online",
-        "service": "PodLink.AI Core Backend",
+        "service": "PodClip.AI Core Backend",
         "version": "1.0.0",
         "redis": "connected" if settings.REDIS_URL else "disabled",
         "ml_service": settings.ML_SERVICE_URL or "not configured",

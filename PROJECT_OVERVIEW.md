@@ -1,8 +1,8 @@
-# PodLink.AI - Complete Project Overview
+# PodClip.AI - Complete Project Overview
 
 ## 📋 Executive Summary
 
-**PodLink.AI** is a production-ready, AI-powered SaaS platform designed to connect podcast hosts with the perfect guests using semantic search, neural collaborative filtering, and real-time communications. The platform is built as a microservices architecture with complete authentication, payment processing, admin controls, and safety features.
+**PodClip.AI** is a production-ready, AI-powered SaaS platform designed to connect podcast hosts with the perfect guests using semantic search, neural collaborative filtering, and real-time communications. The platform is built as a microservices architecture with complete authentication, payment processing, admin controls, and safety features.
 
 **Status:** ✅ **Production Ready** - Core backend and ML services completed
 
@@ -81,7 +81,7 @@ The system consists of **2 main services** orchestrated via Docker Compose:
 ## 📁 Project Structure
 
 ```
-podlink/
+podclip/
 ├── apps/
 │   ├── backend/              # FastAPI Core API
 │   │   ├── app/
@@ -264,7 +264,7 @@ Key variables in `.env`:
 
 ```bash
 # Database
-DATABASE_URL=postgresql://user:pass@localhost:5432/podlink
+DATABASE_URL=postgresql://user:pass@localhost:5432/podclip
 REDIS_URL=redis://localhost:6379/0
 
 # Security

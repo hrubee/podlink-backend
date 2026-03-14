@@ -1,9 +1,9 @@
-# Deployment & Data Pipeline Guide for Podcast AI ML
+# Deployment & Data Pipeline Guide for PodClip.AI ML Service
 
 ## 1. Recommendation Strategy
 We use a **Hybrid Discovery Engine**:
 - **Neural Collaborative Filtering (NCF):** Learns from the "Like" and "Match" interactions tracked by the Backend service. Uses Matrix Factorization + Deep Learning.
-- **Content-Based Fallback:** Uses Sentence-Transformers (from `apps/ingestion-service`) to create profile embeddings. This handles users with 0 interactions (**Cold Start**).
+- **Content-Based Fallback:** Uses Sentence-Transformers to create profile embeddings. This handles users with 0 interactions (**Cold Start**).
 - **External Boost:** Integrates Podchaser global rankings to suggest high-authority shows to new guests.
 
 ## 2. Model Pipeline

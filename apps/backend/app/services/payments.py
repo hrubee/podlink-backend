@@ -76,7 +76,7 @@ class PaymentService:
                 "name": f"{plan_info['name']} ({billing_cycle.capitalize()})",
                 "amount": amount_paise,
                 "currency": "INR",
-                "description": f"PodLink {plan_info['name']} {billing_cycle} subscription",
+                "description": f"PodClip {plan_info['name']} {billing_cycle} subscription",
             },
             "notes": {"plan_key": f"{plan}_{billing_cycle}"},
         })

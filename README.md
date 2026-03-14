@@ -1,9 +1,8 @@
-# PodMatch.AI - Backend Suite
+# PodClip.AI - Backend Suite
 
-This folder contains the complete backend infrastructure for PodMatch.AI, including:
+This folder contains the complete backend infrastructure for PodClip.AI, including:
 *   **Backend API** (FastAPI)
 *   **ML Service** (PyTorch/Faiss)
-*   **Ingestion Service** (Podchaser Pipeline)
 *   **Shared Libraries** & Infrastructure
 
 ## 🚀 Deployment (Railway / Render / VPS)
@@ -21,5 +20,4 @@ docker-compose up -d --build
 ## 🛠 Project Structure
 *   `apps/backend`: Primary API (Port 8000)
 *   `apps/ml-service`: AI Ranking & Vector Search (Port 8001)
-*   `apps/ingestion-service`: Data Pipeline (Port 8002)
 *   `libs/shared`: Shared Python utilities used by all services.

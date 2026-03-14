@@ -1,4 +1,4 @@
-# Railway Deployment Guide — PodMatch.AI Backend
+# Railway Deployment Guide — PodClip.AI Backend
 
 ## Architecture on Railway
 
@@ -8,7 +8,6 @@ Railway Project
 ├── PostgreSQL Service   (managed by Railway)
 ├── Redis Service        (managed by Railway — optional)
 ├── ML Service           (FastAPI — optional, can be disabled initially)
-└── Ingestion Service    (FastAPI — optional, can be disabled initially)
 ```
 
 ---
@@ -23,14 +22,13 @@ SECRET_KEY=<run: openssl rand -hex 32>
 ACCESS_TOKEN_EXPIRE_MINUTES=11520
 PODCHASER_API_KEY=a0f78419-c723-4b03-a264-438b5d95cdde
 PODCHASER_API_SECRET=JKZfJJ77lVNpb60GhbUybeKwl0O1ztyGYSIMvs2Z
-PROJECT_NAME=podcast-ai-saas
+PROJECT_NAME=podclip-backend
 ```
 
 **Optional (add when services are deployed):**
 ```
 REDIS_URL=${{Redis.REDIS_URL}}
 ML_SERVICE_URL=https://<your-ml-service>.up.railway.app
-INGESTION_SERVICE_URL=https://<your-ingestion-service>.up.railway.app
 ```
 
 **Optional (add when Razorpay is configured):**
@@ -85,18 +83,9 @@ Railway automatically sets `$PORT` — the Dockerfile CMD uses `${PORT:-8000}`.
 
 ---
 
-## Step 5: Frontend Service Environment Variables
-
-In Railway → Frontend service → Variables tab:
-
-```
-NEXT_PUBLIC_API_URL=https://<your-backend-service>.up.railway.app
-NEXT_PUBLIC_ML_URL=https://<your-ml-service>.up.railway.app
-```
-
 ---
 
-## Step 6: Health Check
+## Step 5: Health Check
 
 The backend exposes `/health` which Railway uses for health checks.
 Set in Railway → Backend service → Settings → Health Check Path: `/health`

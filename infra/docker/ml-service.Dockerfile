@@ -15,22 +15,23 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-# Install CPU-only PyTorch first (saves ~1.5GB vs default CUDA build)
-RUN pip install --no-cache-dir \
-    torch==2.1.1+cpu \
-    --index-url https://download.pytorch.org/whl/cpu
+# Install CPU-only PyTorch (platform-aware to fix ARM64 Mac builds)
+RUN if [ "$(uname -m)" = "x86_64" ] || [ "$(uname -m)" = "amd64" ]; then \
+      pip install --no-cache-dir torch==2.1.1+cpu torchvision==0.16.1+cpu --index-url https://download.pytorch.org/whl/cpu; \
+    else \
+      pip install --no-cache-dir torch==2.1.1 torchvision==0.16.1; \
+    fi
 
 # Install remaining dependencies
-# Context root = apps/ml-service/, so paths are relative to that
-COPY requirements.txt .
+COPY apps/ml-service/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Pre-download the sentence-transformer model at build time
-COPY download_models.py .
+COPY apps/ml-service/download_models.py .
 RUN python download_models.py
 
-# Copy application code (everything in apps/ml-service/)
-COPY . /app
+# Copy application code
+COPY apps/ml-service /app
 
 # Create registry directory for model checkpoints
 RUN mkdir -p /app/registry
