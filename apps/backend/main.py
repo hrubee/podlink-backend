@@ -94,6 +94,8 @@ app.add_middleware(
         "http://localhost:3001",
         "https://podclip-frontend-production.up.railway.app",
         "https://podclip.radianmedia.org",
+        "https://podlink-frontend-production.up.railway.app",
+        "https://podlink.radianmedia.org",
         *_extra_origins,
     ],
     allow_origin_regex=r"https://.*\.railway\.app",
