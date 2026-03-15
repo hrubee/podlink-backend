@@ -16,24 +16,18 @@ depends_on = None
 
 def upgrade() -> None:
     conn = op.get_bind()
+    inspector = sa.inspect(conn)
+    columns = [c['name'] for c in inspector.get_columns('users')]
 
     # Add subscription_status if not exists
-    result = conn.execute(sa.text(
-        "SELECT column_name FROM information_schema.columns "
-        "WHERE table_name='users' AND column_name='subscription_status'"
-    ))
-    if not result.fetchone():
+    if 'subscription_status' not in columns:
         op.add_column('users', sa.Column(
             'subscription_status', sa.String(), nullable=True, server_default='free'
         ))
         conn.execute(sa.text("UPDATE users SET subscription_status = 'free' WHERE subscription_status IS NULL"))
 
     # Add subscription_ends_at if not exists
-    result = conn.execute(sa.text(
-        "SELECT column_name FROM information_schema.columns "
-        "WHERE table_name='users' AND column_name='subscription_ends_at'"
-    ))
-    if not result.fetchone():
+    if 'subscription_ends_at' not in columns:
         op.add_column('users', sa.Column(
             'subscription_ends_at', sa.DateTime(timezone=True), nullable=True
         ))

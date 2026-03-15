@@ -35,9 +35,11 @@ async def get_matches(
     int_match_ids = [int(mid) for mid in match_ids if str(mid).isdigit()]
     matched_users = db.query(User).filter(User.id.in_(int_match_ids)).all()
     
-    # 3. Format Response — include last message + unread count per conversation
+    # 3. Format Response — include last message + unread count + breakdown
     from app.models.chat import ChatMessage
     from sqlalchemy import desc
+
+    user_topics = set(t.lower() for t in (current_user.topics or []))
 
     def _last_message(other_id: int):
         room_id = "-".join(sorted([str(current_user.id), str(other_id)]))
@@ -60,9 +62,25 @@ async def get_matches(
                 ChatMessage.sender_id == str(other_id),
             )
             .count()
-            # Note: a proper "read" receipt system would track last_read_at per user.
-            # For now we show the total from the other side as a rough unread indicator.
         )
+
+    def _match_breakdown(u: User):
+        cand_topics = set(t.lower() for t in (u.topics or []))
+        common = list(user_topics & cand_topics)
+        
+        factors = []
+        if u.language == current_user.language:
+            factors.append(f"Both speak {u.language}")
+        if u.content_rating == current_user.content_rating:
+            factors.append(f"Shared '{u.content_rating}' content rating")
+        if u.episode_length_pref == current_user.episode_length_pref:
+            factors.append(f"Prefer {u.episode_length_pref} minute episodes")
+        
+        return {
+            "common_topics": common,
+            "compatibility_factors": factors,
+            "score": len(common) * 10 + len(factors) * 5 # Simple heuristic
+        }
 
     return {
         "matches": [
@@ -74,6 +92,7 @@ async def get_matches(
                 "last_message": _last_message(u.id)[0] or "Tap to chat",
                 "last_message_at": _last_message(u.id)[1],
                 "unread_count": _unread_count(u.id),
+                "breakdown": _match_breakdown(u),
             }
             for u in matched_users
         ]

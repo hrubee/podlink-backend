@@ -60,7 +60,7 @@ The system consists of **2 main services** orchestrated via Docker Compose:
 - **Match verification** - only matched users can chat
 
 ### 4. **Payment Integration** ✅
-- **Razorpay integration** for subscriptions
+- **RevenueCat integration** for subscriptions
 - **Tiered Plans** (Free & Pro) with monthly/annual options
 - **Quota management** using Redis sliding window
 - **Webhook verification** for secure payment events
@@ -189,8 +189,7 @@ limits:matches:{user_id}              → Match count (TTL: 30 days)
 - `POST /send` - Send message (with moderation)
 
 ### Payments (`/v1/payments`)
-- `POST /subscribe` - Create Razorpay subscription
-- `POST /webhook/razorpay` - Handle payment events
+- `POST /revenuecat-webhook` - Handle RevenueCat subscription events
 - `GET /status` - Check premium status
 
 ### Admin (`/v1/admin`)
@@ -214,7 +213,7 @@ limits:matches:{user_id}              → Match count (TTL: 30 days)
 - **Cache:** Redis
 - **ORM:** SQLAlchemy 2.0
 - **Auth:** JWT + bcrypt
-- **Payments:** Razorpay
+- **Payments:** RevenueCat
 - **Server:** Uvicorn
 
 ### ML/AI
@@ -231,7 +230,7 @@ limits:matches:{user_id}              → Match count (TTL: 30 days)
 - **Auto-scaling:** Horizontal Pod Autoscaler (HPA) (for K8s, if used)
 
 ### External APIs
-- **Razorpay:** Payment processing
+- **RevenueCat:** Subscription management
 
 ---
 
@@ -271,10 +270,9 @@ REDIS_URL=redis://localhost:6379/0
 SECRET_KEY=yoursecretkeyhere
 ACCESS_TOKEN_EXPIRE_MINUTES=480
 
-# Razorpay
-RAZORPAY_KEY_ID=your_key
-RAZORPAY_KEY_SECRET=your_secret
-RAZORPAY_WEBHOOK_SECRET=your_webhook_secret
+# RevenueCat
+REVENUECAT_API_KEY=your_key
+REVENUECAT_WEBHOOK_AUTH=your_auth_token
 ```
 
 ---
@@ -472,7 +470,7 @@ Proprietary - All rights reserved
 ## 🙏 Acknowledgments
 
 
-- **Razorpay** for payment processing
+- **RevenueCat** for subscription management
 - **HuggingFace** for ML models
 - **FastAPI** for the excellent framework
 

@@ -1,4 +1,3 @@
-import razorpay
 from sqlalchemy.orm import Session
 import redis
 from datetime import datetime, timedelta
@@ -6,19 +5,12 @@ from app.core.config import settings
 import hmac
 import hashlib
 
-_RAZORPAY_CONFIGURED = (
-    settings.RAZORPAY_KEY_ID not in ("not_configured", "", "your_razorpay_key")
-    and settings.RAZORPAY_KEY_SECRET not in ("not_configured", "", "your_razorpay_secret")
-)
-
-# Plan definitions — map plan name and billing cycle to Razorpay plan ID
+# Plan definitions
 PLANS = {
     "pro": {
         "name": "Pro Personality",
-        "price_inr_monthly": 1499,
-        "price_inr_annual": 14390,
-        "razorpay_plan_id_monthly": settings.RAZORPAY_PRO_MONTHLY_PLAN_ID if hasattr(settings, "RAZORPAY_PRO_MONTHLY_PLAN_ID") else "",
-        "razorpay_plan_id_annual": settings.RAZORPAY_PRO_ANNUAL_PLAN_ID if hasattr(settings, "RAZORPAY_PRO_ANNUAL_PLAN_ID") else "",
+        "price_usd_monthly": 19,
+        "price_usd_annual": 190,
     },
 }
 
@@ -29,83 +21,9 @@ class PaymentService:
     def __init__(self, db: Session, r: redis.Redis):
         self.db = db
         self.r = r
-        self._razorpay_client = None  # Lazy init — don't crash on startup
         self.free_limit = FREE_MONTHLY_LIMIT
         self.limit_window_days = 30
 
-    @property
-    def client(self):
-        """Lazily create Razorpay client only when actually needed."""
-        if self._razorpay_client is None:
-            if not _RAZORPAY_CONFIGURED:
-                raise ValueError("Razorpay is not configured. Set RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET.")
-            self._razorpay_client = razorpay.Client(
-                auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET)
-            )
-        return self._razorpay_client
-
-    def _get_or_create_plan(self, plan: str, billing_cycle: str) -> str:
-        """
-        Returns a valid Razorpay plan_id.
-        Priority: env config → Redis cache → auto-create via API.
-        In production, set RAZORPAY_PRO_MONTHLY_PLAN_ID / RAZORPAY_PRO_ANNUAL_PLAN_ID in env.
-        """
-        plan_id = PLANS[plan].get(f"razorpay_plan_id_{billing_cycle}", "")
-        if plan_id:
-            return plan_id
-
-        # Check Redis cache to avoid creating duplicate plans
-        from app.api.deps import NoOpRedis
-        cache_key = f"razorpay:plan_id:{plan}:{billing_cycle}"
-        if not isinstance(self.r, NoOpRedis):
-            cached = self.r.get(cache_key)
-            if cached:
-                return cached.decode() if isinstance(cached, bytes) else cached
-
-        # Auto-create plan in Razorpay (dev / first-time setup)
-        plan_info = PLANS[plan]
-        amount_paise = (
-            plan_info["price_inr_annual"] * 100 if billing_cycle == "annual"
-            else plan_info["price_inr_monthly"] * 100
-        )
-        period = "yearly" if billing_cycle == "annual" else "monthly"
-        created = self.client.plan.create({
-            "period": period,
-            "interval": 1,
-            "item": {
-                "name": f"{plan_info['name']} ({billing_cycle.capitalize()})",
-                "amount": amount_paise,
-                "currency": "INR",
-                "description": f"PodClip {plan_info['name']} {billing_cycle} subscription",
-            },
-            "notes": {"plan_key": f"{plan}_{billing_cycle}"},
-        })
-        new_plan_id = created["id"]
-
-        if not isinstance(self.r, NoOpRedis):
-            self.r.set(cache_key, new_plan_id, ex=86400 * 365)
-
-        return new_plan_id
-
-    async def create_subscription(self, user_id: str, plan: str = "pro", billing_cycle: str = "monthly"):
-        """Creates a Razorpay subscription with a 7-day trial period."""
-        if plan not in PLANS:
-            raise ValueError(f"Unknown plan: {plan}. Choose from {list(PLANS.keys())}")
-        if billing_cycle not in ["monthly", "annual"]:
-            raise ValueError(f"Unknown billing cycle: {billing_cycle}. Choose 'monthly' or 'annual'.")
-
-        plan_id = self._get_or_create_plan(plan, billing_cycle)
-
-        start_at = int((datetime.now() + timedelta(days=7)).timestamp())
-        subscription_data = {
-            "plan_id": plan_id,
-            "customer_notify": 1,
-            "total_count": 12 if billing_cycle == "monthly" else 1,
-            "start_at": start_at,
-            "notes": {"user_id": user_id, "plan": plan, "billing_cycle": billing_cycle}
-        }
-        subscription = self.client.subscription.create(data=subscription_data)
-        return subscription
 
     def get_usage(self, user_id: str) -> dict:
         """Returns current usage and plan info for the billing dashboard."""
@@ -186,17 +104,11 @@ class PaymentService:
         self.r.zadd(quota_key, {str(now): now})
         self.r.expire(quota_key, 2592000)
 
-    def verify_webhook(self, body: str, signature: str) -> bool:
-        """Verifies Razorpay webhook signature. Skips verification when secret not set (dev/test)."""
-        if settings.RAZORPAY_WEBHOOK_SECRET in ("not_configured", "", None):
-            return True
-        try:
-            self.client.utility.verify_webhook_signature(
-                body, signature, settings.RAZORPAY_WEBHOOK_SECRET
-            )
-            return True
-        except Exception:
-            return False
+    def verify_webhook(self, auth_header: str) -> bool:
+        """Verifies RevenueCat webhook via Authorization header."""
+        if not settings.REVENUECAT_WEBHOOK_SECRET:
+            return True  # Dev mode
+        return auth_header == settings.REVENUECAT_WEBHOOK_SECRET
 
     async def activate_paid_status(self, user_id: str, plan: str = "pro", ends_at: datetime = None):
         """Unlocks unlimited access — writes to BOTH Redis (fast) and DB (durable)."""
