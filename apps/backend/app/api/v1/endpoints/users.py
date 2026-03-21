@@ -263,16 +263,44 @@ async def upload_video(
     Standard video upload handling.
     Saves to local /uploads/ directory.
     """
+    from app.core.config import settings
+
     if not file.content_type.startswith("video/"):
         raise HTTPException(status_code=400, detail="Only video files are allowed")
-
-    upload_dir = "uploads"
-    if not os.path.exists(upload_dir):
-        os.makedirs(upload_dir)
 
     # Sanitize and create filename
     ext = file.filename.split(".")[-1]
     filename = f"{uuid.uuid4()}.{ext}"
+
+    # 1. Supabase Upload
+    if settings.SUPABASE_URL and settings.SUPABASE_KEY:
+        try:
+            from supabase import create_client, Client
+            supabase: Client = create_client(settings.SUPABASE_URL, settings.SUPABASE_KEY)
+            
+            file_bytes = await file.read()
+            # upload to the "videos" bucket
+            res = supabase.storage.from_("videos").upload(
+                path=filename,
+                file=file_bytes,
+                file_options={"content-type": file.content_type}
+            )
+            
+            public_url = supabase.storage.from_("videos").get_public_url(filename)
+            
+            return {
+                "url": public_url,
+                "filename": filename,
+                "content_type": file.content_type
+            }
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Supabase upload failed: {str(e)}")
+
+    # 2. Fallback local upload (ephemeral)
+    upload_dir = "uploads"
+    if not os.path.exists(upload_dir):
+        os.makedirs(upload_dir)
+
     file_path = os.path.join(upload_dir, filename)
 
     try:

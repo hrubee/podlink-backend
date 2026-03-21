@@ -24,6 +24,10 @@ class Settings(BaseSettings):
     GOOGLE_CLIENT_ID: str = ""
     GOOGLE_CLIENT_SECRET: str = ""
 
+    # Supabase (for video storage)
+    SUPABASE_URL: Optional[str] = None
+    SUPABASE_KEY: Optional[str] = None
+
     # Observability
     SENTRY_DSN: Optional[str] = None   # Set in Railway: https://xxx@sentry.io/yyy
 
