@@ -1,5 +1,5 @@
 from typing import Any, List, Optional, Dict
-from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks, File, UploadFile
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks, File, UploadFile, Request
 from sqlalchemy.orm import Session
 from app.api import deps, auth_deps
 from app.models.user import User, UserRole
@@ -255,6 +255,7 @@ def get_public_profile(
 
 @router.post("/upload/video")
 async def upload_video(
+    request: Request,
     file: UploadFile = File(...),
     current_user: User = Depends(auth_deps.get_current_user)
 ):
@@ -280,8 +281,8 @@ async def upload_video(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"File save failed: {str(e)}")
 
-    # In a real app, this base URL should come from settings or request.base_url
-    base_url = os.getenv("BACKEND_URL", "http://localhost:8000")
+    # Determine base URL dynamically from the request
+    base_url = os.getenv("BACKEND_URL", str(request.base_url).rstrip('/'))
     return {
         "url": f"{base_url}/uploads/{filename}",
         "filename": filename,
