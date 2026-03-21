@@ -1,9 +1,12 @@
 from typing import Any, List, Optional, Dict
-from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks, File, UploadFile
 from sqlalchemy.orm import Session
 from app.api import deps, auth_deps
 from app.models.user import User, UserRole
 from pydantic import BaseModel
+import os
+import shutil
+import uuid
 
 router = APIRouter()
 
@@ -33,6 +36,7 @@ class OnboardingUpdate(BaseModel):
     social_links: dict = {}
     host_details: dict = {}
     guest_details: dict = {}
+    featured_videos: List[dict] = []
 
 
 class UserUpdate(BaseModel):
@@ -56,6 +60,7 @@ class UserUpdate(BaseModel):
     social_links: Optional[Dict] = None
     host_details: Optional[Dict] = None
     guest_details: Optional[Dict] = None
+    featured_videos: Optional[List[Dict]] = None
 
 
 @router.post("/onboarding", response_model=dict)
@@ -96,6 +101,7 @@ def submit_onboarding(
         current_user.social_links = data.social_links
         current_user.host_details = data.host_details
         current_user.guest_details = data.guest_details
+        current_user.featured_videos = data.featured_videos
 
         current_user.onboarded = True
 
@@ -197,6 +203,7 @@ def get_my_profile(
         "social_links": current_user.social_links,
         "host_details": current_user.host_details,
         "guest_details": current_user.guest_details,
+        "featured_videos": current_user.featured_videos,
     }
 
 
@@ -233,6 +240,7 @@ def get_public_profile(
         "social_links": user.social_links,
         "host_details": user.host_details if user.role == UserRole.HOST else {},
         "guest_details": user.guest_details if user.role == UserRole.GUEST else {},
+        "featured_videos": user.featured_videos,
         "podcasts": [
             {
                 "id": p.id,
@@ -242,4 +250,40 @@ def get_public_profile(
             } for p in user.podcasts
         ] if user.podcasts else [],
         "created_at": user.created_at
+    }
+
+
+@router.post("/upload/video")
+async def upload_video(
+    file: UploadFile = File(...),
+    current_user: User = Depends(auth_deps.get_current_user)
+):
+    """
+    Standard video upload handling.
+    Saves to local /uploads/ directory.
+    """
+    if not file.content_type.startswith("video/"):
+        raise HTTPException(status_code=400, detail="Only video files are allowed")
+
+    upload_dir = "uploads"
+    if not os.path.exists(upload_dir):
+        os.makedirs(upload_dir)
+
+    # Sanitize and create filename
+    ext = file.filename.split(".")[-1]
+    filename = f"{uuid.uuid4()}.{ext}"
+    file_path = os.path.join(upload_dir, filename)
+
+    try:
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"File save failed: {str(e)}")
+
+    # In a real app, this base URL should come from settings or request.base_url
+    base_url = os.getenv("BACKEND_URL", "http://localhost:8000")
+    return {
+        "url": f"{base_url}/uploads/{filename}",
+        "filename": filename,
+        "content_type": file.content_type
     }

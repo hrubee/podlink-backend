@@ -24,9 +24,17 @@ class PodcastBase(BaseModel):
 class PodcastCreate(PodcastBase):
     pass
 
+class PodcastHostPublic(BaseModel):
+    id: int
+    full_name: Optional[str]
+    avatar_url: Optional[str]
+    bio: Optional[str]
+
 class PodcastResponse(PodcastBase):
     id: int
     slug: Optional[str] = None
+    featured_videos: List[dict] = []
+    primary_host: Optional[PodcastHostPublic] = None
     
     class Config:
         orm_mode = True
@@ -45,11 +53,47 @@ def get_podcasts(
 
 @router.get("/{id}", response_model=PodcastResponse)
 def get_podcast(id: int, db: Session = Depends(deps.get_db)):
-    """Get podcast details by ID."""
+    """Get podcast details by ID including the primary host's featured links."""
     podcast = db.query(Podcast).filter(Podcast.id == id).first()
     if not podcast:
         raise HTTPException(status_code=404, detail="Podcast not found")
-    return podcast
+    
+    # Get primary host
+    primary_host_link = db.query(PodcastHost).filter(
+        PodcastHost.podcast_id == podcast.id,
+        PodcastHost.is_primary == True
+    ).first()
+    
+    featured_videos = []
+    host_info = None
+    
+    if primary_host_link:
+        host = db.query(User).filter(User.id == primary_host_link.user_id).first()
+        if host:
+            featured_videos = host.featured_videos or []
+            host_info = {
+                "id": host.id,
+                "full_name": host.full_name,
+                "avatar_url": host.avatar_url,
+                "bio": host.bio
+            }
+    
+    # Create the response manually because we added custom fields not in ORM model directly
+    return {
+        "id": podcast.id,
+        "title": podcast.title,
+        "description": podcast.description,
+        "cover_image": podcast.cover_image,
+        "website_url": podcast.website_url,
+        "rss_feed_url": podcast.rss_feed_url,
+        "topics": podcast.topics,
+        "category": podcast.category,
+        "language": podcast.language,
+        "monthly_listeners": podcast.monthly_listeners,
+        "slug": podcast.slug,
+        "featured_videos": featured_videos,
+        "primary_host": host_info
+    }
 
 @router.post("/", response_model=PodcastResponse)
 def create_podcast(

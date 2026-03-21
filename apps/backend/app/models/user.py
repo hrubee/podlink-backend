@@ -44,6 +44,7 @@ class User(Base):
     social_links = Column(JSON, default={})           # {twitter, linkedin, youtube, website}
     host_details = Column(JSON, default={})           # podcast_name, podcast_desc, audience_size, episode_frequency, guest_wishlist, podcast_url
     guest_details = Column(JSON, default={})          # expertise_areas, topics_to_discuss, experience_years, past_appearances, media_kit_link
+    featured_videos = Column(JSON, default=[])        # [{"title": str, "url": str, "thumbnail": str}]
 
     # ── GDPR & State ──────────────────────────────────────────────────────────
     is_active = Column(Boolean, default=True)

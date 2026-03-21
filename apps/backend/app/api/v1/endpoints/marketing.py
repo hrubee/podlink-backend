@@ -14,7 +14,30 @@ class WaitlistCreate(BaseModel):
 
 @router.post("/join", status_code=status.HTTP_201_CREATED)
 def join_waitlist(data: WaitlistCreate, db: Session = Depends(deps.get_db)):
-    # Check if already exists
+    from app.models.user import User
+    
+    # Check if they already have an actual account
+    existing_user = db.query(User).filter(User.email == data.email).first()
+    if existing_user:
+        from app.core import security
+        from app.core.config import settings
+        from datetime import timedelta
+        access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+        token = security.create_access_token(existing_user.id, expires_delta=access_token_expires)
+        return {
+            "message": "User already has an account", 
+            "status": "user_exists",
+            "access_token": token,
+            "user": {
+                "id": existing_user.id,
+                "email": existing_user.email,
+                "full_name": existing_user.full_name,
+                "role": existing_user.role,
+                "onboarded": existing_user.onboarded
+            }
+        }
+
+    # Check if already exists in waitlist
     existing = db.query(WaitlistEntry).filter(WaitlistEntry.email == data.email).first()
     if existing:
         return {"message": "Already on the waitlist", "status": "exists"}

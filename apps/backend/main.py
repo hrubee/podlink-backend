@@ -1,4 +1,5 @@
 from fastapi import FastAPI, Request, Response
+from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 import logging
@@ -59,6 +60,11 @@ app = FastAPI(
     description="AI-powered podcast host-guest matching platform",
     version="1.0.0",
 )
+
+# ── Static Files (Video Uploads) ──────────────────────────────────────────────
+if not os.path.exists("uploads"):
+    os.makedirs("uploads")
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 # ── Security Headers Middleware ────────────────────────────────────────────────
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
