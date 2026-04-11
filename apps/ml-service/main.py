@@ -55,7 +55,7 @@ async def lifespan(app: FastAPI):
     logger.info("ML service shutting down.")
 
 
-app = FastAPI(title="PodMatch ML Service", version="2.0.0", lifespan=lifespan)
+app = FastAPI(title="Podlink ML Service", version="2.0.0", lifespan=lifespan)
 
 
 # ── Request / Response Models ─────────────────────────────────────────────────

@@ -1,4 +1,4 @@
-# Deployment & Data Pipeline Guide for PodClip.AI ML Service
+# Deployment & Data Pipeline Guide for Podlink ML Service
 
 ## 1. Recommendation Strategy
 We use a **Hybrid Discovery Engine**:

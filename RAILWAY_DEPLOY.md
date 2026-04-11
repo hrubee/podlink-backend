@@ -1,4 +1,4 @@
-# Railway Deployment Guide — PodClip.AI Backend
+# Railway Deployment Guide — Podlink Backend
 
 ## Architecture on Railway
 
@@ -22,7 +22,7 @@ SECRET_KEY=<run: openssl rand -hex 32>
 ACCESS_TOKEN_EXPIRE_MINUTES=11520
 PODCHASER_API_KEY=a0f78419-c723-4b03-a264-438b5d95cdde
 PODCHASER_API_SECRET=JKZfJJ77lVNpb60GhbUybeKwl0O1ztyGYSIMvs2Z
-PROJECT_NAME=podclip-backend
+PROJECT_NAME=podlink-backend
 ```
 
 **Optional (add when services are deployed):**

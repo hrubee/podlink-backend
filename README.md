@@ -1,6 +1,6 @@
-# PodClip.AI - Backend Suite
+# Podlink - Backend Suite
 
-This folder contains the complete backend infrastructure for PodClip.AI, including:
+This folder contains the complete backend infrastructure for Podlink, including:
 *   **Backend API** (FastAPI)
 *   **ML Service** (PyTorch/Faiss)
 *   **Shared Libraries** & Infrastructure
