@@ -99,7 +99,7 @@ app.add_middleware(
         "http://localhost:3000",
         "http://localhost:3001",
         "https://podlink-frontend-production.up.railway.app",
-        "https://podlink.radianmedia.org",
+        "https://app.podlink.in",
         *_extra_origins,
     ],
     allow_origin_regex=r"https://.*\.railway\.app",
