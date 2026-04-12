@@ -2,13 +2,31 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Header
 from sqlalchemy.orm import Session
 import redis
 import json
-from datetime import datetime
+import logging
+from datetime import datetime, timedelta
 from app.services.payments import PaymentService
 from app.api import deps, auth_deps
 from app.models.user import User
 from pydantic import BaseModel
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
+
+
+# ── Request Schemas ──────────────────────────────────────────────────────────
+
+# ── Create Checkout Session ──────────────────────────────────────────────────
+
+@router.post("/checkout")
+async def create_checkout(
+    current_user: User = Depends(auth_deps.get_current_user),
+    db: Session = Depends(deps.get_db),
+    r: redis.Redis = Depends(deps.get_redis)
+):
+    """Creates a Dodo Payments checkout session for the Pro plan and returns the checkout URL."""
+    payment_service = PaymentService(db, r)
+    checkout_url = payment_service.create_checkout_session(current_user)
+    return {"checkout_url": checkout_url}
 
 
 # ── Usage / Billing Dashboard ─────────────────────────────────────────────────
@@ -24,49 +42,71 @@ async def get_usage(
     return payment_service.get_usage(str(current_user.id))
 
 
-# ── RevenueCat Webhook ────────────────────────────────────────────────────────
+# ── Dodo Payments Webhook ────────────────────────────────────────────────────
 
-@router.post("/webhook/revenuecat")
-async def revenuecat_webhook(
+@router.post("/webhook/dodo")
+async def dodo_webhook(
     request: Request,
-    authorization: str = Header(None),
     db: Session = Depends(deps.get_db),
     r: redis.Redis = Depends(deps.get_redis)
 ):
     """
-    Handles RevenueCat lifecycle events.
-    RevenueCat sends an 'Authorization' header with the webhook secret.
+    Handles Dodo Payments webhook events using Standard Webhooks verification.
+    Headers used: webhook-id, webhook-signature, webhook-timestamp
     """
-    payment_service = PaymentService(db, r)
-    
-    if not payment_service.verify_webhook(authorization):
-        raise HTTPException(status_code=401, detail="Invalid webhook secret")
-
     body = await request.body()
+    headers = {
+        "webhook-id": request.headers.get("webhook-id", ""),
+        "webhook-signature": request.headers.get("webhook-signature", ""),
+        "webhook-timestamp": request.headers.get("webhook-timestamp", ""),
+    }
+
+    payment_service = PaymentService(db, r)
+
+    if not payment_service.verify_webhook(body, headers):
+        raise HTTPException(status_code=401, detail="Invalid webhook signature")
+
     data = json.loads(body)
-    event = data.get("event", {})
-    event_type = event.get("type")
-    app_user_id = event.get("app_user_id")
+    event_type = data.get("type", "")
+    payload = data.get("data", {})
 
-    if not app_user_id:
-        return {"status": "ignored", "reason": "no_app_user_id"}
+    # Extract user_id from metadata (set during checkout session creation)
+    metadata = payload.get("metadata", {})
+    user_id = metadata.get("user_id")
 
-    # Map RevenueCat events to app status
-    # INITIAL_PURCHASE, RENEWAL -> activate
-    # EXPIRATION, REVOCATION -> deactivate
-    
-    if event_type in ("INITIAL_PURCHASE", "RENEWAL", "SUBSCRIBER_ALIAS"):
-        # RevenueCat provides expiration_at_ms
-        expiration_ms = event.get("expiration_at_ms")
-        ends_at = datetime.utcfromtimestamp(expiration_ms / 1000.0) if expiration_ms else None
-        
-        # Check if the user has the 'pro' entitlement
-        entitlements = event.get("entitlement_ids", [])
-        if "pro" in entitlements or not entitlements: # Fallback to true if we just care about any purchase
-             await payment_service.activate_paid_status(app_user_id, plan="pro", ends_at=ends_at)
+    if not user_id:
+        logger.warning(f"Dodo webhook missing user_id in metadata: {event_type}")
+        return {"status": "ignored", "reason": "no_user_id_in_metadata"}
 
-    elif event_type in ("EXPIRATION", "REVOCATION"):
-        await payment_service.deactivate_paid_status(app_user_id)
+    logger.info(f"Dodo webhook received: {event_type} for user {user_id}")
+
+    # Subscription lifecycle events
+    if event_type in ("subscription.active", "subscription.renewed"):
+        # Try to extract the next billing date from the payload
+        next_billing = payload.get("next_billing_date")
+        if next_billing:
+            try:
+                ends_at = datetime.fromisoformat(next_billing.replace("Z", "+00:00"))
+            except (ValueError, AttributeError):
+                ends_at = None
+        else:
+            ends_at = None
+
+        await payment_service.activate_paid_status(user_id, plan="pro", ends_at=ends_at)
+
+    elif event_type in (
+        "subscription.on_hold",
+        "subscription.failed",
+        "subscription.cancelled",
+        "subscription.expired",
+    ):
+        await payment_service.deactivate_paid_status(user_id)
+
+    elif event_type == "payment.succeeded":
+        logger.info(f"Payment succeeded for user {user_id}")
+
+    elif event_type == "payment.failed":
+        logger.warning(f"Payment failed for user {user_id}")
 
     return {"status": "processed", "event": event_type}
 

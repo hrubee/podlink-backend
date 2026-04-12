@@ -14,9 +14,13 @@ class Settings(BaseSettings):
     REDIS_URL: Optional[str] = None
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 480  # 8 hours (was 8 days — reduced for security)
 
-    # RevenueCat
-    REVENUECAT_API_KEY: str = ""
-    REVENUECAT_WEBHOOK_SECRET: str = ""
+    # Dodo Payments
+    DODO_PAYMENTS_API_KEY: str = ""
+    DODO_PAYMENTS_WEBHOOK_SECRET: str = ""
+    DODO_PAYMENTS_ENV: str = "live_mode"  # "test_mode" or "live_mode"
+
+    # Frontend URL (for checkout return redirects)
+    FRONTEND_URL: str = "http://localhost:3000"
 
 
 

@@ -2,19 +2,21 @@ from sqlalchemy.orm import Session
 import redis
 from datetime import datetime, timedelta
 from app.core.config import settings
-import hmac
-import hashlib
+from dodopayments import DodoPayments
+from standardwebhooks.webhooks import Webhook
 
 # Plan definitions
 PLANS = {
     "pro": {
         "name": "Pro Personality",
-        "price_usd_monthly": 19,
-        "price_usd_annual": 190,
+        "price_inr_monthly": 1298,
     },
 }
 
 FREE_MONTHLY_LIMIT = 10
+
+# Dodo Payments product ID
+DODO_PRO_PRODUCT_ID = "pdt_0NcYFEQKobDik8chT4mp8"
 
 
 class PaymentService:
@@ -24,6 +26,23 @@ class PaymentService:
         self.free_limit = FREE_MONTHLY_LIMIT
         self.limit_window_days = 30
 
+    def _get_dodo_client(self) -> DodoPayments:
+        return DodoPayments(
+            bearer_token=settings.DODO_PAYMENTS_API_KEY,
+            environment=settings.DODO_PAYMENTS_ENV,
+        )
+
+    def create_checkout_session(self, user) -> str:
+        """Creates a Dodo Payments checkout session and returns the checkout URL."""
+        client = self._get_dodo_client()
+
+        session = client.checkout_sessions.create(
+            product_cart=[{"product_id": DODO_PRO_PRODUCT_ID, "quantity": 1}],
+            customer={"email": user.email, "name": user.full_name or user.email},
+            return_url=f"{settings.FRONTEND_URL}/dashboard/billing?status=success",
+            metadata={"user_id": str(user.id)},
+        )
+        return session.url
 
     def get_usage(self, user_id: str) -> dict:
         """Returns current usage and plan info for the billing dashboard."""
@@ -104,11 +123,16 @@ class PaymentService:
         self.r.zadd(quota_key, {str(now): now})
         self.r.expire(quota_key, 2592000)
 
-    def verify_webhook(self, auth_header: str) -> bool:
-        """Verifies RevenueCat webhook via Authorization header."""
-        if not settings.REVENUECAT_WEBHOOK_SECRET:
-            return True  # Dev mode
-        return auth_header == settings.REVENUECAT_WEBHOOK_SECRET
+    def verify_webhook(self, body: bytes, headers: dict) -> bool:
+        """Verifies Dodo Payments webhook using Standard Webhooks signature."""
+        if not settings.DODO_PAYMENTS_WEBHOOK_SECRET:
+            return True  # Dev mode — no secret configured
+        try:
+            wh = Webhook(settings.DODO_PAYMENTS_WEBHOOK_SECRET)
+            wh.verify(body, headers)
+            return True
+        except Exception:
+            return False
 
     async def activate_paid_status(self, user_id: str, plan: str = "pro", ends_at: datetime = None):
         """Unlocks unlimited access — writes to BOTH Redis (fast) and DB (durable)."""
