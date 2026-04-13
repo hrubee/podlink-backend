@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 from app.core.config import settings
 from dodopayments import DodoPayments
 from standardwebhooks.webhooks import Webhook
+import os
 
 # Plan definitions
 PLANS = {
@@ -16,7 +17,7 @@ PLANS = {
 FREE_MONTHLY_LIMIT = 10
 
 # Dodo Payments product ID
-DODO_PRO_PRODUCT_ID = "pdt_0NcYEoIfM6CYYqJO4aOcS"
+DODO_PRO_PRODUCT_ID = os.getenv("DODO_PRO_PRODUCT_ID", "pdt_0NcYFEQKobDik8chT4mp8")
 
 
 class PaymentService:
