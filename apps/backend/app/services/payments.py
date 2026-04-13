@@ -16,7 +16,7 @@ PLANS = {
 FREE_MONTHLY_LIMIT = 10
 
 # Dodo Payments product ID
-DODO_PRO_PRODUCT_ID = "pdt_0NcYFEQKobDik8chT4mp8"
+DODO_PRO_PRODUCT_ID = "pdt_0NcYEoIfM6CYYqJO4aOcS"
 
 
 class PaymentService:
@@ -42,7 +42,7 @@ class PaymentService:
             return_url=f"{settings.FRONTEND_URL}/dashboard/billing?status=success",
             metadata={"user_id": str(user.id)},
         )
-        return session.url
+        return session.checkout_url
 
     def get_usage(self, user_id: str) -> dict:
         """Returns current usage and plan info for the billing dashboard."""
