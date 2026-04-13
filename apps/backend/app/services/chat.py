@@ -14,6 +14,10 @@ class ChatService:
         self.payment_service = PaymentService(db, r)
 
     async def send_message(self, sender_id: str, receiver_id: str, content: str):
+        # 0. Block self-messaging
+        if str(sender_id) == str(receiver_id):
+            raise ValueError("You cannot send messages to yourself.")
+
         # 1. Match Verification (Hosts/Guests must be matched to chat)
         match_key = f"active_matches:{sender_id}"
         is_matched = self.redis.sismember(match_key, receiver_id)
